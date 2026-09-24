@@ -111,8 +111,9 @@ function M.BuildHit( ply, victim, cfg, idx, variant )
 		m1Variant = variant,
 	}
 
-	-- string-wide settings: Unblockable, BypassRagdoll, HitRagdoll = { [idx] = { h, v, time } } (non-final hits),
+	-- string-wide settings: BlockAll (360 blockable), Unblockable, BypassRagdoll, HitRagdoll = { [idx] = { h, v, time } } (non-final hits),
 	-- UnblockableHits = { [idx] = true }, BlockDamage = { [idx] = fraction of the damage dealt through block }
+	if cfg.BlockAll then hit.block = "all" end
 	if cfg.Unblockable or ( cfg.UnblockableHits and cfg.UnblockableHits[ idx ] ) then hit.block = "none" end
 	if cfg.BlockDamage and cfg.BlockDamage[ idx ] then hit.blockDamage = hit.damage * cfg.BlockDamage[ idx ] end
 	if cfg.BypassRagdoll then hit.bypassRagdoll = true end

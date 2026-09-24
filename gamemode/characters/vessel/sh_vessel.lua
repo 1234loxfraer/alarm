@@ -3,6 +3,11 @@
 
 local K = JJS.Kit
 local F = K.F
+local S = JJS.STUD
+
+-- Black Flash Chain: a Black Flash on the target's back stuns instead (7, 14 on interruption), keeps Divergent Fist off
+-- cooldown and resets the side dash; up to 4 in a row, the 4th a heavy one (15)
+local function Chain( ply ) return ply.jjs_bfChain and CurTime() < ply.jjs_bfChain.t and ply.jjs_bfChain.n or 0 end
 
 K.Character( "vessel", {
 	name = "Vessel",
@@ -32,8 +37,8 @@ K.Character( "vessel", {
 		-- A blow (5, blockable) followed by delayed cursed energy that launches the opponent back (5, unblockable).
 		-- Interruption variant: if the delayed energy interrupts an action, it stuns instead of launching.
 		-- Follow-up "Black Flash": pressed again as the arm is pulled back and the body flashes white (10, 20 on interruption).
-		-- TODO "Black Flash Chain": on the target's back, stuns instead; up to 4 in a row (7, 14 on interruption; 15 for
-		-- the fourth), each resetting the side dash.
+		-- "Black Flash Chain": landed on the target's back, it stuns instead of ragdolling and the move stays available: up
+		-- to 4 in a row (7, 14 on interruption; the 4th a heavy "KOKUSEN", 15), each resetting the side dash.
 		[ 3 ] = K.Melee{ "Divergent Fist", cooldown = 18, startup = 0.35, hits = 2, interval = 0.35, hitDamage = { 5, 5 }, hitBlock = { "normal", "none" },
 			type = "melee", ragdoll = { h = 45, v = 16 }, interrupt = { stun = 1.2 }, tip = "USE TWICE",
 			again = K.Melee{ "Black Flash", window = 0.5, startup = 0.15, damage = 10, type = "melee", block = "none", trueRag = true,
@@ -44,7 +49,7 @@ K.Character( "vessel", {
 	},
 	-- During an M1 or a skill's windup (not Manji Kick): cancels it with no endlag and keeps the move off cooldown.
 	-- Costs 3% awakening (not required).
-	-- TODO special variant: near a throwable, punches it forward (15, bullet).
+	-- TODO special variant: near a throwable, punches it forward (15, bullet; needs throwables in the gamemode).
 	special = K.Feint{ "Combat Instincts", cooldown = 2, awakenCost = 0.03 },
 
 	awakening = {
@@ -52,14 +57,27 @@ K.Character( "vessel", {
 		duration = 60,
 		heal = 45,
 		-- The user faints as Sukuna takes over: "You're such an annoying brat."
-		-- TODO passive "Shrine": M1s become slashes reaching 24 studs, blockable from all sides; no uppercuts or downslams.
+		-- Shrine: M1s become quick slashes reaching 24 studs instead of 8, blockable from all sides; no uppercuts or downslams.
+		m1 = { HitSize = Vector( 24, 8, 8 ) * S, HitCenter = 11 * S, BlockAll = true, NoLaunch = true },
 		abilities = {
 			-- A barrage of Dismantle slashes on the opponent in front (17.5, 10 if blocked, 360 blockable).
 			-- Air variant: a flip into a long Dismantle slash (25, explosion, unblockable).
-			-- TODO variant "World Cutting Slash": Rush during Dismantle's windup, then Open, then Cleave (80).
+			-- "World Cutting Slash": Rush during Dismantle's windup, then Open, then Cleave, chanting "SCALE OF THE DRAGON",
+			-- "RECOIL", "TWIN METEORS": total i-frames and a massive horizontal slash cutting the world itself (80, less the
+			-- more it hits). Needs Dismantle and Cleave off cooldown; Open goes on its full cooldown and Dismantle's doubles.
+			-- Started airborne, it's done midair with 360 aim.
 			[ 1 ] = K.Projectile{ "Dismantle", cooldown = 13, startup = 0.35, damage = 17.5, blockDamage = 10, range = 30, speed = 220, radius = 4,
 				type = "bullet", block = "all", bypassRagdoll = true, color = "red",
-				air = { damage = 25, blockDamage = false, block = "none", type = "explosion", explode = 10 } },
+				air = { damage = 25, blockDamage = false, block = "none", type = "explosion", explode = 10 },
+				combo = { [ 3 ] = { kind = "stub", free = true, name = "SCALE OF THE DRAGON", startup = 0.6, endlag = 0.1, iframes = 2.5,
+					combo = { [ 2 ] = { kind = "stub", free = true, name = "RECOIL", startup = 0.6, endlag = 0.1, combo = false,
+						special = { kind = "beam", name = "World Cutting Slash", specialCooldown = 12, startup = 0.5, damage = 80, range = 150,
+							radius = 10, pierce = true, maxPitch = 1, type = "explosion", block = "none", bypassRagdoll = true, color = "red",
+							crater = 2200, ragdoll = { h = 70, v = 25 },
+							onUse = function( ply )
+								JJS.SetCooldown( ply, 2, 40 )
+								JJS.SetCooldown( ply, 1, 26 )
+							end } } } } } },
 			-- Fire gathered into an arrow and shot forward (30).
 			[ 2 ] = K.Projectile{ "Open", cooldown = 40, startup = 1.2, damage = 30, range = 110, speed = 170, radius = 5, type = "explosion",
 				block = "none", bypassRagdoll = true, uninterruptible = true, explode = 16, color = "orange", crater = 1600,
@@ -75,3 +93,44 @@ K.Character( "vessel", {
 			onHit = function( ply, victim ) JJS.ApplyDamage( victim, ply, math.max( 0, victim:GetJHP() * 0.4 - 10 ), { type = JJS.DMG.MELEE } ) end },
 	},
 } )
+
+-- Black Flash Chain
+local vs = JJS.Characters.vessel
+local df = vs.abilities[ 3 ]
+local dfAgain = df.Again
+df.Again = function( ply, mv, slot )
+	-- mid-chain: straight into the next Black Flash
+	if Chain( ply ) > 0 and ply:Alive() and not ply:GetJRagdolled() and not JJS.IsStunned( ply ) then
+		if JJS.GetAction( ply ) then JJS.StopAction( ply, true ) end
+		-- back on cooldown unless this one lands on the back again
+		JJS.SetCooldown( ply, 3, df.cooldown or 18 )
+		df.again.Use( ply, mv, 0 )
+		return true
+	end
+	return dfAgain and dfAgain( ply, mv, slot ) or false
+end
+
+if SERVER then
+	hook.Add( "JJS_PreHit", "JJS_BlackFlashChain", function( victim, hit )
+		local a = hit.attacker
+		if not hit.kit or hit.kit.name ~= "Black Flash" or not IsValid( a ) or a:GetJChar() ~= "vessel" then return end
+		local back = JJS.Util.YawForward( victim:EyeAngles().y ):Dot( JJS.Util.Flat( victim:GetPos() - a:GetPos() ) ) > 0.3
+		if not back then a.jjs_bfChain = nil return end
+		local n = Chain( a ) + 1
+		a.jjs_bfChain = { n = n, t = CurTime() + 1.6 }
+		if n >= 4 then
+			hit.damage = 15
+			a.jjs_bfChain = nil
+			return
+		end
+		hit.damage = hit.interrupted and 14 or 7
+		hit.ragdoll = nil
+		hit.stun = 1.3
+		hit.jjs_bfChain = true
+	end )
+	hook.Add( "JJS_Hit", "JJS_BlackFlashChain", function( victim, hit, res )
+		if not hit.jjs_bfChain or res ~= "hit" then return end
+		JJS.SetCooldown( hit.attacker, 3, 0 )
+		hit.attacker:SetJDashSideCD( 0 )
+	end )
+end
