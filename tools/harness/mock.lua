@@ -324,6 +324,7 @@ function ENTITY:GetBoneMatrix() return nil end
 function ENTITY:TranslatePhysBoneToBone() return 0 end
 function ENTITY:GetPhysicsObjectCount() return 1 end
 function ENTITY:EyePos() return self.pos + Vector( 0, 0, 64 * ( self.scale or 1 ) ) end
+function ENTITY:KeyDown( k ) return ( ( self.oldButtons or 0 ) & k ) ~= 0 end
 for _, kind in ipairs( { "Float", "Int", "Bool", "Vector", "Angle", "Entity", "String" } ) do
 	local def = ( { Float = 0, Int = 0, Bool = false, String = "" } )[ kind ]
 	ENTITY[ "SetNW2" .. kind ] = function( self, k, v ) self.nw[ k ] = v end

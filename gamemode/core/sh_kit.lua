@@ -52,7 +52,9 @@
 --   Rush       startup in place, then travel (studs over time seconds) with the hitbox active; the first
 --              target met is caught and takes the remaining hits (held in front); iframesOnHit (seconds)
 --   Beam       range, radius, pierce, duration (channelled), tick, clash (beam clash strength)
---   Projectile speed, range, radius, count, spread, explode (radius), gravity
+--   Projectile speed, range, radius, count, spread, explode (radius), explodeDamage, directOnly (no blast after a
+--              direct hit), gravity, guided (follows the owner's aim), ghost (passes through players),
+--              onExplode(ply, pos, hitSomeone, ent)
 --   Summon     a slow projectile (shikigami, swarms)
 --   AoE        radius, offset (studs in front of the user), up (studs)
 --   Counter    window, counters = { melee = "counter", bullet = "evade", ... }, riposte (damage), teleport,
@@ -67,7 +69,8 @@
 --   Buff       duration, speed, speedTime, evasive, awaken
 --   Zone       lingering area: radius, duration, tick, damage (per tick), follow (stays on the user), offset,
 --              target = true (placed on the aimed target within range and follows them), acting (only hits
---              players performing an action, interrupting it), once (each target once), onPlace(ply, pos, p)
+--              players performing an action, interrupting it), once (each target once), onPlace(ply, pos, p),
+--              zoneHits = { damage per successive hit on the same target }
 --   AoE / Zone center(ply) -> position (or nil to cancel): placed there instead of in front of the user
 --   Beam       far = { dist, ragdoll, onHit } for targets hit beyond `dist` studs, falloff (damage at max range)
 --   stunRag = { h, v, time }: targets already stunned are ragdolled instead
@@ -848,10 +851,13 @@ if SERVER then
 				for _, v in ipairs( K.SphereTargets( center + Vector( 0, 0, 36 ), z.p.radius, ply, z.p.bypassRagdoll ) ) do
 					-- acting: only players in the middle of a move (not blocking or side dashing); once: each target once
 					local acting = not z.p.acting or ( JJS.IsBusy( v ) or v:GetJDashType() == JJS.Dash.FRONT ) and not JJS.IsBlocking( v )
-					if acting and not ( z.p.once and z.done[ v ] ) then
-						z.done[ v ] = true
+					-- zoneHits = { damage of the 1st hit on a target, the 2nd, ... } (no more after the last)
+					local n = z.done[ v ] or 0
+					if acting and not ( z.p.once and n > 0 ) and not ( z.p.zoneHits and n >= #z.p.zoneHits ) then
+						z.done[ v ] = n + 1
 						if z.p.acting and JJS.GetAction( v ) then JJS.StopAction( v, true ) end
 						local hit = K.MakeHit( ply, z.p, v, 1, center )
+						if z.p.zoneHits then hit.damage = z.p.zoneHits[ n + 1 ] end
 						-- falloff: weaker the farther from the centre
 						if z.p.falloff then hit.damage = hit.damage * math.max( 0.05, 1 - v:GetPos():Distance( center ) / z.p.radius ) end
 						JJS.Hit( v, hit )
@@ -1335,7 +1341,7 @@ function Build( id, key, spec )
 			if c.test( ply ) then condHit = true break end
 		end
 		-- airborne, the air variant is used right away (it can't be held)
-		if spec.hold and not condHit and not ( air and not ply:IsOnGround() ) then
+		if spec.hold and not condHit and not ( ( air or V.highAir ) and not ply:IsOnGround() ) then
 			JJS.SetCooldown( ply, slot, ab.cooldown )
 			JJS.StartAction( ply, name .. ".charge", slot )
 			return

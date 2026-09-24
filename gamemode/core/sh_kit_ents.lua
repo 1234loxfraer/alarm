@@ -60,15 +60,22 @@ if SERVER then
 	function ENT:Explode( pos )
 		local st = self.jjs
 		local p = st.p
-		if p.explode then
+		-- directOnly: a direct hit skips the blast; explodeDamage: the blast's own damage
+		if p.explode and not ( p.directOnly and next( st.hit ) ) then
+			local ep = p
+			if p.explodeDamage then
+				ep = table.Copy( p )
+				ep.damage, ep.hitDamage, ep.hits = p.explodeDamage, nil, 1
+			end
 			for _, v in ipairs( K.SphereTargets( pos, p.explode, st.owner, p.bypassRagdoll ) ) do
-				if not st.hit[ v ] then K.Apply( st.owner, p, v, nil, pos ) end
+				if not st.hit[ v ] then K.Apply( st.owner, ep, v, nil, pos ) end
 			end
 			K.Effect( "jjs_kit_burst", pos, Vector( 0, 0, 1 ), nil, p.explode, p )
 		else
 			K.Effect( "jjs_kit_burst", pos, Vector( 0, 0, 1 ), nil, p.radius * 3, p )
 		end
 		if p.crater then JJS.Destruction.GroundImpact( pos + Vector( 0, 0, 20 ), p.crater ) end
+		if p.onExplode then p.onExplode( st.owner, pos, next( st.hit ) ~= nil, self ) end
 		self:Remove()
 	end
 
@@ -81,6 +88,8 @@ if SERVER then
 		local p = st.p
 
 		if p.gravity then st.vel.z = st.vel.z - p.gravity * dt end
+		-- guided: flies where its owner looks (Bird Strike)
+		if p.guided then st.vel = st.owner:GetAimVector() * st.vel:Length() end
 		local from = self:GetPos()
 		local step = st.vel * dt
 		local len = step:Length()
@@ -88,7 +97,8 @@ if SERVER then
 		local dir = step / len
 
 		local tr = util.TraceLine( { start = from, endpos = from + step, mask = MASK_SOLID_BRUSHONLY } )
-		local hits = U.PlayersOnRay( from, dir, len, p.radius, { ignore = st.owner, ragdolled = p.bypassRagdoll } )
+		-- ghost: passes through players
+		local hits = p.ghost and {} or U.PlayersOnRay( from, dir, len, p.radius, { ignore = st.owner, ragdolled = p.bypassRagdoll } )
 		for _, h in ipairs( hits ) do
 			local v = h.ply
 			if st.hit[ v ] then continue end
