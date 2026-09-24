@@ -66,7 +66,8 @@
 --              target = true (placed on the aimed target within range and follows them), acting (only hits
 --              players performing an action, interrupting it), once (each target once), onPlace(ply, pos, p)
 --   AoE / Zone center(ply) -> position (or nil to cancel): placed there instead of in front of the user
---   Beam       far = { dist, ragdoll, onHit } for targets hit beyond `dist` studs
+--   Beam       far = { dist, ragdoll, onHit } for targets hit beyond `dist` studs, falloff (damage at max range)
+--   stunRag = { h, v, time }: targets already stunned are ragdolled instead
 --   Domain     duration, sureHit ("damage", "stun", "drain"), dps, radius
 --   Toggle     switches to the alternate moveset (def.alt)
 --   Feint      cancels the startup of the move being performed and refunds its cooldown
@@ -253,8 +254,14 @@ function K.MakeHit( ply, p, victim, idx, from )
 end
 
 -- Applies a hit and handles blocked endlag; returns the JJS.Hit result
-function K.Apply( ply, p, victim, idx, from )
+function K.Apply( ply, p, victim, idx, from, scale )
 	local hit = K.MakeHit( ply, p, victim, idx, from )
+	if scale then hit.damage = hit.damage * scale end
+	-- stunRag = { h, v }: a target that is already stunned is ragdolled instead (Granite Blast)
+	if p.stunRag and JJS.IsStunned( victim ) and not victim:GetJRagdolled() then
+		local away = U.Flat( victim:GetPos() - ( from or ply:GetPos() ) )
+		hit.ragdoll = { time = p.stunRag.time or 0.8, vel = away * ( p.stunRag.h or 30 ) * S + Vector( 0, 0, ( p.stunRag.v or 15 ) * S ) }
+	end
 	-- interrupting the target's action (a move or a dash, not a block) upgrades the hit
 	local it = p.interrupt
 	-- hit.interrupting: the target was in the middle of a move or a dash; hit.guarding: they were blocking
@@ -616,7 +623,9 @@ local function FireRay( ply, p, tick )
 	end
 	for n, h in ipairs( hits ) do
 		if not p.pierce then stop = start + dir * h.dist end
-		K.Apply( ply, ( p.farP and h.dist > p.far.dist * S ) and p.farP or p, h.ply, tick, start )
+		-- falloff: damage drops linearly to `falloff` at max range
+		local scale = p.falloff and Lerp( h.dist / p.range, 1, p.falloff / math.max( p.damage / p.hits, 0.01 ) ) or nil
+		K.Apply( ply, ( p.farP and h.dist > p.far.dist * S ) and p.farP or p, h.ply, tick, start, scale )
 		if not p.pierce then break end
 		if n >= 8 then break end
 	end
