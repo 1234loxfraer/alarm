@@ -230,7 +230,7 @@ if SERVER then
 			p:SetJDashType( 0 )
 			p:SetLocalVelocity( Vector() )
 			JJS.Heal( p, 1000 )
-			for i = 1, 5 do p[ "SetJCD" .. i ]( p, 0 ) end
+			JJS.ClearCooldowns( p )
 		end
 		A:SetPos( Vector( 0, 0, 0 ) )
 		A:SetEyeAngles( Angle( 0, 0, 0 ) )
@@ -264,10 +264,12 @@ if SERVER then
 		if opts.ragdolled then JJS.Ragdoll.Apply( B, { time = 3 } ) Run( 0.3 ) end
 		-- aim at the target like a player would
 		A:SetEyeAngles( ( B:GetPos() + Vector( 0, 0, 40 ) - A:EyePos() ):Angle() )
-		Press( KEYS[ slot ], opts.hold, nil, opts.back and -400 )
+		Press( KEYS[ opts.feint or slot ], opts.hold, nil, opts.back and -400 )
 		if opts.again then Run( 0.15 ) Press( KEYS[ slot ] ) end
+		if opts.again2 then Run( 0.3 ) Press( KEYS[ slot ] ) end
+		if opts.feint then Run( 0.05 ) Press( KEYS[ slot ] ) end
 		if opts.special then Run( 0.05 ) Press( JJS.IN.SPECIAL ) end
-		if opts.combo then Run( 0.05 ) Press( KEYS[ opts.combo ] ) end
+		if opts.combo then Run( math.max( 0.05, ( ab.spec.comboFrom or 0 ) + 0.05 ) ) Press( KEYS[ opts.combo ] ) end
 		if opts.after then Run( opts.after ) Press( JJS.IN.SPECIAL ) end
 		Run( opts.time or 3 )
 		local n = ( hits[ A ] or 0 ) - before
@@ -301,6 +303,8 @@ if SERVER then
 				c.test = test
 			end
 			for cs in pairs( ab and ab.spec and ab.spec.combo or {} ) do TrySlot( "combo" .. cs, slot, { combo = cs } ) end
+			if ab and ab.again and ab.again.again then TrySlot( "again2", slot, { again = true, again2 = true } ) end
+			if ab and ab.spec and ab.spec.feints then TrySlot( "feint", slot, { feint = slot == 1 and 2 or 1 } ) end
 		end
 		-- alternate set
 		local char = JJS.Characters[ id ]
@@ -348,6 +352,7 @@ if SERVER then
 					c.test = test
 				end
 				for cs in pairs( ab and ab.spec and ab.spec.combo or {} ) do TrySlot( "awk-combo" .. cs, slot, { combo = cs } ) end
+				if ab and ab.again and ab.again.again then TrySlot( "awk-again2", slot, { again = true, again2 = true } ) end
 			end
 			if char.awakening and char.awakening.alt then
 				for slot = 1, 5 do TrySlot( "awk-alt", slot, { setup = function() A:SetJKitSet( 1 ) end } ) end
@@ -431,6 +436,40 @@ if SERVER then
 		report[ #report + 1 ] = string.format( "after clash: %d domains left", #ents.FindByClass( "jjs_domain" ) )
 		JJS.ExitAwakening( A ) JJS.ExitAwakening( B )
 	end
+
+	-- EXTRA=file.lua: an ad-hoc scenario run with the harness helpers in scope
+	if os.getenv( "EXTRA" ) then
+		local env = setmetatable( { A = A, B = B, Press = Press, Run = Run, Reset = Reset, KEYS = KEYS, report = report, Tick = Tick,
+			hits = hits }, { __index = _G } )
+		local f = assert( loadfile( os.getenv( "EXTRA" ), "t", env ) )
+		local ok, err = xpcall( f, debug.traceback )
+		if not ok then Fail( "extra", err ) end
+	end
+
+	-- parries: B starts a move with a parry window and A's M1 lands in it
+	for _, id in ipairs( chars ) do
+		if ONLY and id ~= ONLY then goto nextParry end
+		for _, set in ipairs( { JJS.Characters[ id ], JJS.Characters[ id ].alt } ) do
+			for slot, ab in pairs( set.abilities or {} ) do
+				if ab.spec and ab.spec.parry then
+					A:SetJChar( JJS.Config.DefaultCharacter ) A:Spawn()
+					B:SetJChar( id ) B:Spawn()
+					Reset()
+					if set ~= JJS.Characters[ id ] then B:SetJKitSet( 1 ) end
+					local hp0 = B:GetJHP()
+					Tick( { [ B ] = { buttons = KEYS[ slot ] } } )
+					A:SetPos( Vector( 40, 0, 0 ) )
+					for _ = 1, 6 do Tick( { [ A ] = { buttons = JJS.IN.M1 } } ) end
+					Run( 0.3 )
+					report[ #report + 1 ] = string.format( "parry %s %s: A stunned=%s, B hp %.1f -> %.1f", id, ab.name,
+						tostring( JJS.IsStunned( A ) ), hp0, B:GetJHP() )
+					B:SetJKitSet( 0 )
+				end
+			end
+		end
+		::nextParry::
+	end
+	B:SetJChar( JJS.Config.DefaultCharacter ) B:Spawn()
 
 	-- dummies
 	Reset()

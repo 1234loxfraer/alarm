@@ -6,7 +6,7 @@
 --   m1 = { overrides of JJS.Config.M1 }
 --   abilities = { [1..4] = ability }, special = ability
 --   alt = { name, abilities, special } -- second moveset toggled by the character (ply:GetJKitSet() == 1)
---   awakening = { name, duration, heal, abilities, special, alt }
+--   awakening = { name, duration, heal, abilities, special, alt, m1 = { M1 overrides while awakened } }
 --   awakenMove = ability -- base-only characters: G performs this move instead of a moveset
 --   passives = { { name, desc }, ... } -- listed in the menu
 --   hooks: Awaken(ply, mv), AwakenPress(ply, mv) (G while awakened), OnM1Final(ply, variant, cfg) -> true if
@@ -28,6 +28,12 @@ function JJS.RegisterCharacter( id, def )
 	local m1 = table.Copy( JJS.Config.M1 )
 	for k, v in pairs( def.m1 or {} ) do m1[ k ] = v end
 	def.m1 = m1
+	-- awakening.m1 = { overrides of the base M1 } used while awakened
+	if def.awakening and def.awakening.m1 then
+		local am1 = table.Copy( m1 )
+		for k, v in pairs( def.awakening.m1 ) do am1[ k ] = v end
+		def.awakening.m1cfg = am1
+	end
 	def.color = def.color or Color( 120, 200, 255 )
 	def.hp = def.hp or JJS.Config.MaxHealth
 	def.category = def.category or "complete"

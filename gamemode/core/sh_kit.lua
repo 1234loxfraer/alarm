@@ -18,7 +18,15 @@
 --   slow = { mult, time } applied to targets hit, onEnd(ply, p) when the move finishes uninterrupted
 --   hitDamage = { per hit }, hitBlock = { per hit block rule }, hitBypass = { per hit: hits ragdolls }
 --   A variant's own `cooldown` replaces the move's cooldown when that variant is used.
---   interrupt = { damage (bonus), stun, ragdoll } when the hit interrupts the target's action (HIT tip)
+--   interrupt = { damage (bonus), stun, ragdoll, onInterrupt(ply, victim, p) } when the hit interrupts the target's
+--              action (HIT tip); lowHp = { hp, damage, stun }: final hit bonus against targets at or under `hp`
+--   guardBreak = { damage, stun, onBreak(ply, victim, p) } when the target is blocking: the block is broken instead
+--   onContact(ply, victim, p, result) whenever a hit connects (landed or blocked)
+--   parry = { window, counters = { melee = true, ... } }: hits taken this early in the move are parried
+--   feints = true: usable during another move (cancelling it), feintCooldown when it does
+--   comboWindow: combos can be pressed until this time into the move (default: the startup), from comboFrom
+--   meleeIFrames (seconds from the start: melee hits pass through), knock (studs/s push on each hit),
+--   knockBlock (the push also goes through block), chase (studs/s run at the target between hits)
 --   Variants (tables of overrides, each becomes its own action):
 --     air (user airborne), airTarget (target airborne), ragdolled (target ragdolled), back (walking
 --     backward: DIRECTION), highAir (airborne well above jump height), cond (cond.test(ply) is true),
@@ -43,8 +51,10 @@
 --   Target     range (studs to the aimed target), then hits it like Melee after appearing next to it
 --              (noHit = true: only teleports; teleport = false: hits the target from where the user stands;
 --              pullIn = true: the first hit drags the target in front of the user)
---   specialAfter = spec with a `window`: pressing the special right after the move (Face Grater...)
---   Mobility   travel, time, dir ("forward", "back", "up", "aim"), hit (hit at the end)
+--   specialAfter = spec with a `window`: pressing the special right after the move (Face Grater...); `anyway` =
+--              even when nothing landed, `free` = ignores the special's cooldown
+--   Mobility   travel, time, dir ("forward", "back", "up", "aim", "target" = hop toward the last player hit), arc (hop),
+--              steer (forward/back keys lengthen/shorten it, jump raises the arc)
 --   Buff       duration, speed, speedTime, evasive, awaken
 --   Zone       lingering area: radius, duration, tick, damage (per tick), follow (stays on the user), offset,
 --              target = true (placed on the aimed target within range and follows them)
@@ -220,6 +230,11 @@ function K.MakeHit( ply, p, victim, idx, from )
 		if away:LengthSqr() < 0.01 then away = K.Fwd( ply ) end
 		hit.ragdoll = { time = p.ragdoll.time, vel = away * p.ragdoll.h + Vector( 0, 0, p.ragdoll.v ), trueRag = p.trueRag }
 	end
+	if p.knock and not hit.ragdoll then
+		local away = U.Flat( victim:GetPos() - ( from or ply:GetPos() ) )
+		if away:LengthSqr() < 0.01 then away = K.Fwd( ply ) end
+		hit.knock = away * p.knock * S + Vector( 0, 0, 40 )
+	end
 	if last and p.onHit then
 		hit.onHit = function( v ) p.onHit( ply, v, p ) end
 	end
@@ -240,7 +255,30 @@ function K.Apply( ply, p, victim, idx, from )
 		end
 		hit.interrupted = true
 	end
+	-- lowHp = { hp, damage, stun }: bonus on the final hit against a target at or under `hp`
+	local lo = p.lowHp
+	if lo and ( idx or p.hits ) >= p.hits and victim:GetJHP() <= lo.hp then
+		hit.damage = hit.damage + ( lo.damage or 0 )
+		if lo.stun and not hit.ragdoll then hit.stun = lo.stun end
+	end
+	-- block breaks: a blocking target is crushed instead
+	local gb = p.guardBreak
+	if gb and JJS.IsBlocking( victim ) then
+		hit.damage = gb.damage or hit.damage
+		hit.block = "none"
+		hit.ragdoll = nil
+		hit.stun = gb.stun or 2
+		victim:SetJBlockStart( 0 )
+		hit.guardBroken = true
+	end
 	local r = JJS.Hit( victim, hit )
+	if r == "blocked" and hit.knock and p.knockBlock then victim:SetLocalVelocity( hit.knock ) end
+	if r == "hit" or r == "killed" or r == "blocked" then
+		ply:SetNW2Entity( "JJSLastHit", victim )
+		if p.onContact then p.onContact( ply, victim, p, r ) end
+		if hit.guardBroken and gb.onBreak and r ~= "blocked" then gb.onBreak( ply, victim, p ) end
+		if hit.interrupted and it.onInterrupt and r ~= "blocked" then it.onInterrupt( ply, victim, p ) end
+	end
 	local own = JJS.IsBusy( ply ) and JJS.GetAction( ply ).kitParams == p
 	if r == "blocked" and not ply.jjs_kitBlocked and own then
 		ply.jjs_kitBlocked = true
@@ -344,8 +382,33 @@ local function HitEvents( p, fn )
 	return evs
 end
 
+-- Parry: a hit of a listed type during the first `window` seconds is evaded and the attacker pushed back
+local function Parry( p )
+	local pr = p.parry or ( p.meleeIFrames and { window = p.meleeIFrames, dodge = true } )
+	if not pr then return end
+	return function( victim, attacker, hit )
+		if JJS.ActionTime( victim ) > pr.window then return end
+		local ok = false
+		for name in pairs( pr.counters or { melee = true } ) do
+			if DMG_BY_NAME[ name ] == hit.type then ok = true end
+		end
+		if not ok then return end
+		-- dodge: typed i-frames (melee i-frames), nothing happens to the attacker
+		if pr.dodge then return "dodged" end
+		JJS.IFrames( victim, pr.iframes or 0.5 )
+		if IsValid( attacker ) and attacker:IsPlayer() and attacker ~= victim then
+			JJS.Stun( attacker, pr.stun or 0.6 )
+			attacker:SetLocalVelocity( U.Flat( attacker:GetPos() - victim:GetPos() ) * 300 )
+		end
+		K.Effect( "jjs_kit_cast", U.BodyCenter( victim ), nil, victim, 1.2, p )
+		if pr.onParry then pr.onParry( victim, attacker, hit ) end
+		return "parried"
+	end
+end
+
 local function Base( p )
 	return {
+		counter = Parry( p ),
 		kitParams = p,
 		dur = Duration( p ),
 		moveMult = p.moveMult or 0.35,
@@ -385,9 +448,28 @@ local function Lunge( p )
 	end
 end
 
+-- chase (studs/s): after the first hit lands, runs at the target until the next hit
+local function Chase( p, lunge )
+	if not p.chase then return lunge end
+	return function( ply, mv, t )
+		if lunge and lunge( ply, mv, t ) then return true end
+		if t < p.startup or t >= p.startup + ( p.hits - 1 ) * p.interval then return false end
+		local v = ply:GetNW2Entity( "JJSLastHit" )
+		if not IsValid( v ) or not v:Alive() then return false end
+		local to = v:GetPos() - mv:GetOrigin()
+		to.z = 0
+		if to:Length() < p.reach * 0.6 then
+			mv:SetVelocity( vector_origin )
+			return true
+		end
+		K.Drive( ply, mv, to:GetNormalized() * p.chase * S )
+		return true
+	end
+end
+
 IMPL.melee = function( p )
 	local def = Base( p )
-	def.move = Lunge( p )
+	def.move = Chase( p, Lunge( p ) )
 	def.events = HitEvents( p, function( ply, i )
 		for _, v in ipairs( K.BoxTargets( ply, p ) ) do
 			K.Apply( ply, p, v, i )
@@ -596,9 +678,24 @@ IMPL.mobility = function( p )
 		if p.dir == "back" then dir = -U.YawForward( yaw )
 		elseif p.dir == "up" then dir = Vector( 0, 0, 1 )
 		elseif p.dir == "aim" then dir = ply:GetAimVector()
+		elseif p.dir == "target" then
+			-- a hop toward the last player hit (JJSLastHit), rising by `arc`
+			local v = ply:GetNW2Entity( "JJSLastHit" )
+			dir = IsValid( v ) and v:Alive() and U.Flat( v:GetPos() - mv:GetOrigin() ) or U.YawForward( yaw )
 		else dir = U.YawForward( yaw ) end
+		-- arc: rises then falls along the way (a hop)
+		local arc = p.arc or ( p.dir == "target" and 0.3 )
+		if arc then
+			if p.steer and mv:KeyDown( IN_JUMP ) then arc = arc * 1.8 end
+			dir = ( dir + Vector( 0, 0, arc * ( 1 - 2 * ( t - p.startup ) / p.time ) ) ):GetNormalized()
+		end
 		local speed = p.travel / p.time
-		if p.dir == "up" or p.dir == "aim" then
+		-- steer: holding forward carries further, holding back hops short
+		if p.steer then
+			local f = mv:GetForwardSpeed()
+			speed = speed * ( f > 0 and 1.3 or f < 0 and 0.5 or 1 )
+		end
+		if p.dir == "up" or p.dir == "aim" or arc then
 			JJS.Move.Slide( ply, mv, dir * speed, FrameTime(), false )
 		else
 			K.Drive( ply, mv, dir * speed )
@@ -862,7 +959,8 @@ end
 function K.TryCombo( ply, mv, slot )
 	local act = JJS.GetAction( ply )
 	local c = act and act.kitCombos and act.kitCombos[ slot ]
-	if not c or JJS.ActionTime( ply ) >= act.kitParams.startup then return false end
+	local at = JJS.ActionTime( ply )
+	if not c or at >= ( act.kitParams.comboWindow or act.kitParams.startup ) or at < ( act.kitParams.comboFrom or 0 ) then return false end
 	if not c.free and JJS.GetCooldown( ply, slot ) > CurTime() then return false end
 	if not ply:Alive() or ply:GetJRagdolled() or JJS.IsStunned( ply ) then return false end
 	c.trigger( ply, mv, slot )
@@ -873,7 +971,7 @@ end
 function K.TrySpecialVariant( ply, mv )
 	-- follow-up right after a move (Face Grater after Rapid Punches...)
 	local fa = ply.jjs_specialAfter
-	if fa and CurTime() < fa.t and ( ply.jjs_kitLanded or fa.ab.spec.anyway ) and JJS.GetCooldown( ply, 5 ) <= CurTime()
+	if fa and CurTime() < fa.t and ( ply.jjs_kitLanded or fa.ab.spec.anyway ) and ( fa.ab.spec.free or JJS.GetCooldown( ply, 5 ) <= CurTime() )
 		and ply:Alive() and not ply:GetJRagdolled() and not JJS.IsStunned( ply ) then
 		ply.jjs_specialAfter = nil
 		JJS.StopAction( ply, true )
@@ -908,7 +1006,7 @@ function Build( id, key, spec )
 			local act = JJS.GetAction( ply )
 			if not act or not ply:Alive() or ply:GetJRagdolled() or JJS.IsStunned( ply ) then return false end
 			local startup = act.kitParams and act.kitParams.startup
-				or ( act.name == "m1" and ( JJS.M1.Timing( JJS.GetChar( ply ).m1, JJS.M1.Unpack( ply:GetJActVar() ) ) ) )
+				or ( act.name == "m1" and ( JJS.M1.Timing( JJS.M1.Cfg( ply ), JJS.M1.Unpack( ply:GetJActVar() ) ) ) )
 			return startup and JJS.ActionTime( ply ) < startup or false
 		end
 		ab.Use = function( ply, mv, slot )
@@ -916,7 +1014,7 @@ function Build( id, key, spec )
 			local from = act.kitParams and ply:GetJActVar() or 0
 			JJS.SetCooldown( ply, slot, ab.cooldown )
 			JJS.StopAction( ply, true )
-			if from >= 1 and from <= 4 then ply[ "SetJCD" .. from ]( ply, 0 ) end
+			if from >= 1 and from <= 4 then JJS.SetCooldown( ply, from, 0 ) end
 			if spec.awakenCost and not ply:GetJAwakened() then ply:SetJAwaken( math.max( 0, ply:GetJAwaken() - spec.awakenCost ) ) end
 			if SERVER then K.Effect( "jjs_kit_cast", U.BodyCenter( ply ), nil, ply, 0.7, Params( spec ) ) end
 		end
@@ -1002,6 +1100,8 @@ function Build( id, key, spec )
 						local other = JJS.GetAbility( ply, pressed )
 						JJS.SetCooldown( ply, pressed, over.comboCooldown or ( other and other.cooldown ) or 10 )
 					end
+					-- the combo's own cooldown replaces the move's (Judgement's Reach leap: half cooldown)
+					if over.cooldown and slot0 >= 1 and slot0 <= 5 then JJS.SetCooldown( ply, slot0, over.cooldown ) end
 					Start( ply, mv, slot0, ab, c, true )
 				end,
 			}
@@ -1043,22 +1143,48 @@ function Build( id, key, spec )
 		Start( ply, mv, slot, ab, K.PickVariant( ply, mv, p, V, air, move ) )
 	end
 
+	if spec.feints then
+		-- usable during another move: that move is cancelled first
+		local canUse, use = ab.CanUse, ab.Use
+		ab.CanUse = function( ply, slot, mv )
+			local act = JJS.GetAction( ply )
+			if act and act.kitParams and act.kitParams ~= p and ply:Alive() and not ply:GetJRagdolled() and not JJS.IsStunned( ply ) then
+				return true
+			end
+			return canUse( ply, slot, mv )
+		end
+		ab.Use = function( ply, mv, slot )
+			local act = JJS.GetAction( ply )
+			local feinted = act and act.kitParams and act.kitParams ~= p
+			if feinted then JJS.StopAction( ply, true ) end
+			use( ply, mv, slot )
+			if feinted and spec.feintCooldown then JJS.SetCooldown( ply, slot, spec.feintCooldown ) end
+		end
+	end
+
 	if ab.again then
 		local base = ab.tip
 		ab.tip = function( ply, slot )
 			local a = ply.jjs_again and ply.jjs_again[ slot ]
-			if a and a.ab == ab and CurTime() < a.t then return spec.again.tip or "USE AGAIN" end
+			if a and CurTime() < a.t then return a.ab == ab and ( spec.again.tip or "USE AGAIN" ) or "USE AGAIN" end
 			return isfunction( base ) and base( ply, slot ) or base
 		end
 		ab.Again = function( ply, mv, slot )
 			local a = ply.jjs_again and ply.jjs_again[ slot ]
-			if not a or a.ab ~= ab or CurTime() > a.t then return false end
+			if not a or CurTime() > a.t then return false end
+			-- a follow-up of the follow-up (third press...)
+			if a.ab ~= ab then return a.ab.Again ~= nil and a.ab.Again( ply, mv, slot ) end
 			local act = JJS.GetAction( ply )
 			local own = act and ( act.name == name or act.name == name .. ".air" )
 			if not own and not DefaultCanUse( ply ) then return false end
 			if not ply:Alive() or ply:GetJRagdolled() or JJS.IsStunned( ply ) then return false end
 			ply.jjs_again[ slot ] = nil
 			ab.again.Use( ply, mv, 0 )
+			local sub = ab.again
+			if sub.Again then
+				local sa = sub.spec.again
+				ply.jjs_again[ slot ] = { t = CurTime() + ( ( sa.spec or sa ).window or 1.5 ), ab = sub }
+			end
 			return true
 		end
 	end

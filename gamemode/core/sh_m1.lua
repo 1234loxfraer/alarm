@@ -12,6 +12,13 @@ local M = JJS.M1
 M.NEUTRAL, M.UP, M.DOWN = 0, 1, 2
 
 -- var = index + variant * 16 (+ 64 when the character picked its alternate version at start)
+-- The M1 settings in use: the awakening's own (awakening.m1) while awakened
+function M.Cfg( ply )
+	local char = JJS.GetChar( ply )
+	if ply:GetJAwakened() and char.awakening and char.awakening.m1cfg then return char.awakening.m1cfg end
+	return char.m1
+end
+
 function M.Unpack( var )
 	return var % 16, math.floor( var / 16 ) % 4, var >= 64
 end
@@ -33,7 +40,7 @@ function M.TryStart( ply, mv )
 	if not JJS.CanAct( ply ) or JJS.IsBlocking( ply ) or dash == JJS.Dash.FRONT or JJS.IsBusy( ply ) then return end
 	if ply:GetJMoveState() == JJS.MOVE_WALLRUN then return end
 
-	local cfg = JJS.GetChar( ply ).m1
+	local cfg = M.Cfg( ply )
 	local idx = ply:GetJM1Index()
 	if now - ply:GetJM1LastEnd() > cfg.ChainWindow then idx = 0 end
 	idx = idx + 1
@@ -108,7 +115,7 @@ end
 function M.DoHit( ply, var )
 	if CLIENT then return end
 	local char = JJS.GetChar( ply )
-	local cfg = char.m1
+	local cfg = M.Cfg( ply )
 	local idx, variant, alt = M.Unpack( var )
 	local final = idx >= cfg.Count
 
@@ -144,32 +151,32 @@ function M.DoHit( ply, var )
 end
 
 local function Startup( ply, var )
-	local startup = M.Timing( JJS.GetChar( ply ).m1, M.Unpack( var or ply:GetJActVar() ) )
+	local startup = M.Timing( M.Cfg( ply ), M.Unpack( var or ply:GetJActVar() ) )
 	return startup
 end
 
 JJS.RegisterAction( "m1", {
 	dur = function( ply, var )
-		local _, dur = M.Timing( JJS.GetChar( ply ).m1, M.Unpack( var ) )
+		local _, dur = M.Timing( M.Cfg( ply ), M.Unpack( var ) )
 		return dur
 	end,
-	moveMult = function( ply ) return JJS.GetChar( ply ).m1.MoveMult end,
+	moveMult = function( ply ) return M.Cfg( ply ).MoveMult end,
 	dashCancel = Startup,
 	seq = function( ply, var )
-		local m1 = JJS.GetChar( ply ).m1
+		local m1 = M.Cfg( ply )
 		if m1.Seq then return m1.Seq( ply, M.Unpack( var ) ) end
 	end,
 	gesture = function( ply, var )
 		local idx, variant = M.Unpack( var )
-		local char = JJS.GetChar( ply )
-		if char.m1.Gestures then return char.m1.Gestures( ply, idx, variant ) end
+		local cfg = M.Cfg( ply )
+		if cfg.Gestures then return cfg.Gestures( ply, idx, variant ) end
 		return idx % 2 == 1 and "range_fists_r" or "range_fists_l"
 	end,
 	events = {
 		{ Startup, function( ply, t, var ) M.DoHit( ply, var ) end },
 	},
 	finish = function( ply, var, interrupted )
-		local cfg = JJS.GetChar( ply ).m1
+		local cfg = M.Cfg( ply )
 		local idx = M.Unpack( var )
 		ply:SetJM1LastEnd( CurTime() )
 		if idx >= cfg.Count and not interrupted then

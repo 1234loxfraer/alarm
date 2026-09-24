@@ -211,7 +211,13 @@ JJS.RegisterAction( "dash_punch", {
 				block = "normal",
 				fx = "light",
 			}
-			if var == 1 then
+			local nr = JJS.M1.Cfg( ply ).FrontDashStun
+			if var == 1 and nr then
+				-- M1 setting FrontDashStun: knocked backwards with stun instead of ragdolled
+				hit.stun = nr
+				hit.knock = fwd * cfg.FrontRagdoll.h * 0.6
+				hit.fx = "heavy"
+			elseif var == 1 then
 				local rc = cfg.FrontRagdoll
 				hit.ragdoll = { time = rc.time, vel = fwd * rc.h + Vector( 0, 0, rc.v ) }
 				hit.fx = "heavy"

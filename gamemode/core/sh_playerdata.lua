@@ -96,10 +96,23 @@ function JJS.ResetPlayerData( ply, keepAwaken )
 	if keepAwaken then ply:SetJAwaken( awaken ) end
 end
 
+-- The alternate moveset (Rika, Ten Shadows' switch..) keeps its own cooldowns (networked separately)
 function JJS.GetCooldown( ply, slot )
+	if ply:GetJKitSet() == 1 then return ply:GetNW2Float( "JJSAltCD" .. slot, 0 ) end
 	return ply[ "GetJCD" .. slot ]( ply )
 end
 
 function JJS.SetCooldown( ply, slot, seconds )
+	if ply:GetJKitSet() == 1 then
+		ply:SetNW2Float( "JJSAltCD" .. slot, CurTime() + seconds )
+		return
+	end
 	ply[ "SetJCD" .. slot ]( ply, CurTime() + seconds )
+end
+
+function JJS.ClearCooldowns( ply )
+	for i = 1, 5 do
+		ply[ "SetJCD" .. i ]( ply, 0 )
+		ply:SetNW2Float( "JJSAltCD" .. i, 0 )
+	end
 end

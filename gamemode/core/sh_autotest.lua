@@ -123,7 +123,7 @@ SC.extra = {
 			ResetDummy( ctx.dummy )
 			-- 2: downslam: drop from above with the string at its last hit
 			local host = ctx.host
-			host:SetJM1Index( JJS.GetChar( host ).m1.Count - 1 )
+			host:SetJM1Index( JJS.M1.Cfg( host ).Count - 1 )
 			host:SetJM1LastEnd( CurTime() + 1 )
 			host:SetJM1CD( 0 )
 			Teleport( host, Ahead( ctx, 4.5 ) + Vector( 0, 0, 120 ), ctx.yaw )

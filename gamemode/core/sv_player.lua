@@ -164,7 +164,7 @@ function JJS.Transform( ply, id, revert )
 	local hp = math.max( 1, char.hp * frac )
 	ply:SetJHP( hp )
 	ply:SetHealth( math.ceil( hp ) )
-	for i = 1, 5 do ply[ "SetJCD" .. i ]( ply, 0 ) end
+	JJS.ClearCooldowns( ply )
 	ply.jjs_revertChar = revert
 	if char.OnSpawn then char.OnSpawn( ply ) end
 	hook.Run( "JJS_Transformed", ply, id )
@@ -202,7 +202,7 @@ end
 
 concommand.Add( "jjs_reset", function( ply )
 	if not Dev( ply ) then return end
-	for i = 1, 5 do ply[ "SetJCD" .. i ]( ply, 0 ) end
+	JJS.ClearCooldowns( ply )
 	ply:SetJDashFrontCD( 0 )
 	ply:SetJDashSideCD( 0 )
 	ply:SetJM1CD( 0 )

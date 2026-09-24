@@ -62,7 +62,7 @@ function JJS.EnterAwakening( ply, duration, heal )
 	ply:SetJAwakenEnd( CurTime() + duration )
 	ply:SetJKitSet( 0 )
 	ply.jjs_awakenDur = duration
-	for i = 1, 5 do ply[ "SetJCD" .. i ]( ply, 0 ) end
+	JJS.ClearCooldowns( ply )
 	local aw = JJS.GetChar( ply ).awakening
 	if aw and aw.hp and SERVER then
 		ply:SetMaxHealth( aw.hp )
@@ -78,7 +78,7 @@ function JJS.ExitAwakening( ply )
 	ply:SetJAwaken( 0 )
 	ply:SetJAwakenEnd( 0 )
 	ply:SetJKitSet( 0 )
-	for i = 1, 5 do ply[ "SetJCD" .. i ]( ply, 0 ) end
+	JJS.ClearCooldowns( ply )
 	local char = JJS.GetChar( ply )
 	if SERVER and char.awakening and char.awakening.hp and ply:Alive() then
 		ply:SetMaxHealth( char.hp )
