@@ -25,6 +25,7 @@
 --   parry = { window, counters = { melee = true, ... } }: hits taken this early in the move are parried
 --   feints = true: usable during another move (cancelling it), feintCooldown when it does
 --   detached = true: performed by a companion; the user only casts for `cast` seconds and the hits follow on their own
+--              (onDone(ply, target, p) once they all played out)
 --   comboWindow: combos can be pressed until this time into the move (default: the startup), from comboFrom
 --   meleeIFrames (seconds from the start: melee hits pass through), knock (studs/s push on each hit),
 --   knockBlock (the push also goes through block), chase (studs/s run at the target between hits)
@@ -879,7 +880,7 @@ local function Detach( p, def )
 		start = function( ply )
 			if start then start( ply ) end
 			if CLIENT then return end
-			K.Detached[ #K.Detached + 1 ] = { owner = ply, target = ply:GetJActTarget(), t0 = CurTime(), evs = evs, i = 1 }
+			K.Detached[ #K.Detached + 1 ] = { owner = ply, target = ply:GetJActTarget(), t0 = CurTime(), evs = evs, i = 1, p = p }
 		end,
 	}
 end
@@ -901,7 +902,10 @@ if SERVER then
 					ply:SetJActTarget( old )
 					d.i = d.i + 1
 				end
-				if not d.evs[ d.i ] then table.remove( K.Detached, n ) end
+				if not d.evs[ d.i ] then
+					table.remove( K.Detached, n )
+					if d.p.onDone then d.p.onDone( ply, d.target, d.p ) end
+				end
 			end
 		end
 	end )
@@ -1079,11 +1083,12 @@ function Build( id, key, spec )
 	end
 
 	if spec.kind == "bymode" then
-		local built, names = {}, {}
+		local built, names, seen = {}, {}, {}
 		for i, sub in ipairs( spec ) do
 			if istable( sub ) then
 				built[ i - 1 ] = Build( id, key .. ".m" .. i, sub )
-				names[ #names + 1 ] = built[ i - 1 ].name
+				local n = built[ i - 1 ].name
+				if not seen[ n ] then names[ #names + 1 ] = n seen[ n ] = true end
 			end
 		end
 		ab.name = table.concat( names, " / " )
@@ -1195,7 +1200,8 @@ function Build( id, key, spec )
 	if ( p.kind == "target" or p.target ) and not ab.tip then ab.tip = "TARGET" end
 
 	ab.Use = function( ply, mv, slot )
-		if spec.hold then
+		-- a conditional variant takes over the hold (Offloaded Ultra Cannon...)
+		if spec.hold and not ( V.cond and p.cond.test( ply ) ) then
 			JJS.SetCooldown( ply, slot, ab.cooldown )
 			JJS.StartAction( ply, name .. ".charge", slot )
 			return

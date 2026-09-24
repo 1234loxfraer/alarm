@@ -239,6 +239,7 @@ if SERVER then
 		for _, d in ipairs( ents.FindByClass( "jjs_domain" ) ) do d:Remove() end
 		for _, d in ipairs( ents.FindByClass( "jjs_projectile" ) ) do d:Remove() end
 		for k in pairs( JJS.Kit.Zones ) do JJS.Kit.Zones[ k ] = nil end
+		for k in pairs( JJS.Kit.Detached ) do JJS.Kit.Detached[ k ] = nil end
 		A:SetNW2Entity( "JJSDomain", NULL )
 		B:SetNW2Entity( "JJSDomain", NULL )
 		Run( 0.1 )
@@ -326,6 +327,7 @@ if SERVER then
 		Reset()
 		A:SetJAwaken( 1 )
 		if id == "truecannon" then A:SetJRes1( 0.85 ) end
+		if id == "puppetmaster" then A:SetNW2Float( "JJSReserve", 1 ) end
 		local beforeAwk = hits[ A ] or 0
 		Press( JJS.IN.AWAKEN )
 		Run( 5 )
