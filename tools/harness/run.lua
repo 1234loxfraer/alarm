@@ -457,9 +457,11 @@ if SERVER then
 					Reset()
 					if set ~= JJS.Characters[ id ] then B:SetJKitSet( 1 ) end
 					local hp0 = B:GetJHP()
-					Tick( { [ B ] = { buttons = KEYS[ slot ] } } )
+					-- A's M1 is on its way (12f startup) when B starts the move
 					A:SetPos( Vector( 40, 0, 0 ) )
-					for _ = 1, 6 do Tick( { [ A ] = { buttons = JJS.IN.M1 } } ) end
+					Tick( { [ A ] = { buttons = JJS.IN.M1 } } )
+					Run( 0.1 )
+					Tick( { [ B ] = { buttons = KEYS[ slot ] } } )
 					Run( 0.3 )
 					report[ #report + 1 ] = string.format( "parry %s %s: A stunned=%s, B hp %.1f -> %.1f", id, ab.name,
 						tostring( JJS.IsStunned( A ) ), hp0, B:GetJHP() )

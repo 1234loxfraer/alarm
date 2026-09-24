@@ -24,6 +24,7 @@
 --   onContact(ply, victim, p, result) whenever a hit connects (landed or blocked)
 --   parry = { window, counters = { melee = true, ... } }: hits taken this early in the move are parried
 --   feints = true: usable during another move (cancelling it), feintCooldown when it does
+--   detached = true: performed by a companion; the user only casts for `cast` seconds and the hits follow on their own
 --   comboWindow: combos can be pressed until this time into the move (default: the startup), from comboFrom
 --   meleeIFrames (seconds from the start: melee hits pass through), knock (studs/s push on each hit),
 --   knockBlock (the push also goes through block), chase (studs/s run at the target between hits)
@@ -34,7 +35,7 @@
 --     `specialCooldown` = cooldown put on the special), combo = { [slot] = overrides } (another move's key
 --     pressed during the startup: both moves go on cooldown unless `free`), miss (spec started when
 --     nothing was hit),
---   air = { overrides } (used while airborne), hold = { time, overrides } (HOLD variant),
+--   air = { overrides } (used while airborne), hold = { time, overrides } (HOLD variant) or a list of such stages,
 --   again = spec with a `window` (USE AGAIN / USE TWICE follow-up), onUse(ply, p) when the move starts
 --
 -- Kinds and their own fields:
@@ -370,7 +371,7 @@ local function HitEvents( p, fn )
 			if CLIENT then return end
 			fn( ply, i, var )
 			-- a whiffed move has its own (usually longer) recovery
-			if i == p.hits and not ply.jjs_kitLanded and not ply.jjs_kitBlocked and JJS.IsBusy( ply ) then
+			if i == p.hits and not ply.jjs_kitLanded and not ply.jjs_kitBlocked and JJS.IsBusy( ply ) and JJS.GetAction( ply ).kitParams == p then
 				if p.missAb then
 					p.missAb.Use( ply, nil, 0 )
 				elseif p.whiffEndlag then
@@ -396,7 +397,7 @@ local function Parry( p )
 		-- dodge: typed i-frames (melee i-frames), nothing happens to the attacker
 		if pr.dodge then return "dodged" end
 		JJS.IFrames( victim, pr.iframes or 0.5 )
-		if IsValid( attacker ) and attacker:IsPlayer() and attacker ~= victim then
+		if IsValid( attacker ) and attacker:IsPlayer() and attacker ~= victim and hit.type == JJS.DMG.MELEE then
 			JJS.Stun( attacker, pr.stun or 0.6 )
 			attacker:SetLocalVelocity( U.Flat( attacker:GetPos() - victim:GetPos() ) * 300 )
 		end
@@ -863,9 +864,53 @@ end
 -- Building abilities
 ------------------------------------------------------------------------------------------
 
+-- detached: the move is performed by a companion (Rika...): the user only makes a short motion (`cast` seconds)
+-- and is free again while the hits play out on their own timeline (server Tick below)
+K.Detached = K.Detached or {}
+local function Detach( p, def )
+	local evs = def.events or {}
+	local start = def.start
+	return {
+		kitParams = p,
+		dur = p.cast or 0.15,
+		moveMult = 0.8,
+		gesture = "gesture_item_throw",
+		counter = def.counter,
+		start = function( ply )
+			if start then start( ply ) end
+			if CLIENT then return end
+			K.Detached[ #K.Detached + 1 ] = { owner = ply, target = ply:GetJActTarget(), t0 = CurTime(), evs = evs, i = 1 }
+		end,
+	}
+end
+
+if SERVER then
+	hook.Add( "Tick", "JJS_KitDetached", function()
+		local now = CurTime()
+		for n = #K.Detached, 1, -1 do
+			local d = K.Detached[ n ]
+			local ply = d.owner
+			if not IsValid( ply ) or not ply:Alive() then
+				table.remove( K.Detached, n )
+			else
+				while d.evs[ d.i ] and now - d.t0 >= JJS.Resolve( d.evs[ d.i ][ 1 ], ply, 0 ) do
+					-- the events read the action target: lend them the one this move started with
+					local old = ply:GetJActTarget()
+					ply:SetJActTarget( d.target or NULL )
+					d.evs[ d.i ][ 2 ]( ply, now - d.t0, 0 )
+					ply:SetJActTarget( old )
+					d.i = d.i + 1
+				end
+				if not d.evs[ d.i ] then table.remove( K.Detached, n ) end
+			end
+		end
+	end )
+end
+
 local function Register( name, p )
 	local impl = IMPL[ p.kind ] or IMPL.stub
 	local def = impl( p )
+	if p.detached then def = Detach( p, def ) end
 	JJS.RegisterAction( name, def )
 	if p.kind == "counter" then
 		p.riposteAction = name .. ".riposte"
@@ -1042,6 +1087,7 @@ function Build( id, key, spec )
 			end
 		end
 		ab.name = table.concat( names, " / " )
+		ab.modes = built
 		ab.Pick = function( ply ) return built[ ply:GetJMode() ] or built[ 0 ] end
 		return ab
 	end
@@ -1050,8 +1096,17 @@ function Build( id, key, spec )
 	local move = { p = p, action = Register( name, p ) }
 	local air = spec.air and { p = Params( spec, spec.air ) }
 	if air then air.action = Register( name .. ".air", air.p ) end
-	local hold = spec.hold and { p = Params( spec, spec.hold ) }
-	if hold then hold.action = Register( name .. ".hold", hold.p ) end
+	-- hold = { time, overrides } or a list of stages { { time, overrides }, ... } (the longest reached is used)
+	local stages, hold
+	if spec.hold then
+		stages = {}
+		for i, h in ipairs( spec.hold[ 1 ] and spec.hold or { spec.hold } ) do
+			local st = { p = Params( spec, h ), time = h.time or 1 }
+			st.action = Register( name .. ".hold" .. ( i > 1 and i or "" ), st.p )
+			stages[ i ] = st
+		end
+		hold = stages[ #stages ]
+	end
 	if spec.again then
 		local sub = spec.again.spec or spec.again
 		ab.again = Build( id, key .. ".again", sub )
@@ -1111,16 +1166,21 @@ function Build( id, key, spec )
 		end
 	end
 
-	if spec.hold then
-		local need = spec.hold.time or 1
+	if stages then
+		local need = hold.time
 		JJS.RegisterAction( name .. ".charge", {
 			dur = need + 1.5,
 			moveMult = 0.4,
 			gesture = "gesture_bow",
+			counter = Parry( p ), -- a parry window starts with the charge
 			think = function( ply, t, mv, slot )
 				local held = mv and mv:KeyDown( KeyFor( slot ) )
 				if held and t < need + 1 then return end
-				Start( ply, mv, slot, ab, t >= need and hold or move, true )
+				local pick = move
+				for _, st in ipairs( stages ) do
+					if t >= st.time then pick = st end
+				end
+				Start( ply, mv, slot, ab, pick, true )
 			end,
 		} )
 	end
