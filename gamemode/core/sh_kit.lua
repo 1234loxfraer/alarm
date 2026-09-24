@@ -1201,6 +1201,7 @@ function Build( id, key, spec )
 		ab.tip = spec.tip or function( ply ) return string.upper( spec.modes[ ply:GetJMode() + 1 ] or "" ) end
 		ab.Use = function( ply, mv, slot )
 			JJS.SetCooldown( ply, slot, ab.cooldown )
+			if spec.awakenCost and not ply:GetJAwakened() then ply:SetJAwaken( math.max( 0, ply:GetJAwaken() - spec.awakenCost ) ) end
 			ply:SetJMode( ( ply:GetJMode() + 1 ) % #spec.modes )
 			if SERVER then K.Effect( "jjs_kit_cast", U.BodyCenter( ply ), nil, ply, 1, Params( spec ) ) end
 		end
