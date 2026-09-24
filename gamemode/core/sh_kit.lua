@@ -691,7 +691,7 @@ IMPL.projectile = function( p )
 	for n = 1, count do
 		def.events[ #def.events + 1 ] = { p.startup + ( n - 1 ) * ( p.volley or 0.12 ), function( ply )
 			if CLIENT then return end
-			local dir = K.AimDir( ply, 0.6 )
+			local dir = K.AimDir( ply, p.maxPitch or 0.6 )
 			if p.spread and count > 1 then
 				local ang = dir:Angle()
 				ang:RotateAroundAxis( ang:Up(), ( n - ( count + 1 ) / 2 ) * p.spread )

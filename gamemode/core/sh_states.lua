@@ -25,6 +25,10 @@ end
 function JJS.StaggerArm( ply, seconds ) ply:SetNW2Float( "JJSArmStagger", math.max( ply:GetNW2Float( "JJSArmStagger", 0 ), CurTime() + seconds ) ) end
 function JJS.StaggerLeg( ply, seconds ) ply:SetNW2Float( "JJSLegStagger", math.max( ply:GetNW2Float( "JJSLegStagger", 0 ), CurTime() + seconds ) ) end
 
+-- Free flight (Mokou); JJS.Fly( ply, 0 ) ends it
+function JJS.IsFlying( ply ) return ply:GetNW2Float( "JJSFly", 0 ) > CurTime() end
+function JJS.Fly( ply, seconds ) ply:SetNW2Float( "JJSFly", seconds > 0 and CurTime() + seconds or 0 ) end
+
 -- Hovering in the air (air combos); JJS.Hover( ply, 0 ) ends it
 function JJS.IsHovering( ply ) return ply:GetNW2Float( "JJSHover", 0 ) > CurTime() end
 function JJS.Hover( ply, seconds )

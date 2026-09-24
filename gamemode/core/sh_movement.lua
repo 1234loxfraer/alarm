@@ -441,6 +441,18 @@ function GM:Move( ply, mv )
 	local def = JJS.GetAction( ply )
 	if def and def.move and def.move( ply, mv, JJS.ActionTime( ply ), ply:GetJActVar() ) then return true end
 
+	-- free flight: along the camera with the movement keys, jump rises, crouch sinks
+	if JJS.IsFlying( ply ) then
+		local ang = mv:GetMoveAngles()
+		local f, s = U.InputDir( mv )
+		local dir = ang:Forward() * f + ang:Right() * s
+		if mv:KeyDown( IN_JUMP ) then dir.z = dir.z + 1 end
+		if mv:KeyDown( IN_DUCK ) then dir.z = dir.z - 1 end
+		local vel = dir:LengthSqr() > 0 and dir:GetNormalized() * 30 * JJS.STUD or mv:GetVelocity() * 0.85
+		M.Slide( ply, mv, vel, FrameTime(), false )
+		return true
+	end
+
 	-- hovering (air combos): suspended in the air, drifting slowly with the movement keys
 	if JJS.IsHovering( ply ) then
 		local yaw = mv:GetMoveAngles().y
