@@ -32,6 +32,10 @@ function JJS.Hover( ply, seconds )
 	if seconds > 0 then ply:SetLocalVelocity( vector_origin ) end
 end
 
+-- Impaired (Jawbreaker): only walking and awakening are possible
+function JJS.IsImpaired( ply ) return ply:GetNW2Float( "JJSImpaired", 0 ) > CurTime() end
+function JJS.Impair( ply, seconds ) ply:SetNW2Float( "JJSImpaired", math.max( ply:GetNW2Float( "JJSImpaired", 0 ), CurTime() + seconds ) ) end
+
 function JJS.Stun( ply, seconds )
 	ply:SetJStunEnd( math.max( ply:GetJStunEnd(), CurTime() + seconds ) )
 end

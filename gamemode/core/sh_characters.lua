@@ -78,6 +78,7 @@ function JJS.GetAbility( ply, slot )
 end
 
 function JJS.TryAbility( ply, mv, slot )
+	if JJS.IsImpaired( ply ) then return end
 	if slot == 5 and JJS.Kit.TrySpecialVariant( ply, mv ) then return end
 	if slot ~= 5 and JJS.Kit.TryCombo( ply, mv, slot ) then return end
 	local ab = JJS.GetAbility( ply, slot )

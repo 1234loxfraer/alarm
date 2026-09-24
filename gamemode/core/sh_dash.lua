@@ -84,6 +84,7 @@ end
 
 function D.TryStart( ply, mv )
 	local now = CurTime()
+	if JJS.IsImpaired( ply ) then return end
 	local f, s = U.InputDir( mv )
 	local side = not ( s == 0 and f >= 0 )
 	local localDir = side and Vector( f, s, 0 ) or Vector( 1, 0, 0 )
@@ -101,7 +102,10 @@ function D.TryStart( ply, mv )
 	end
 
 	if ply:GetJRagdolled() then
-		if SERVER and side and ply:GetJEvasive() >= 1 and not ply:GetJTrueRagdoll() then
+		-- char.PayEvasive(ply) -> true: the ragdoll cancel is paid another way (Lucky Coward's miracles)
+		local char = JJS.GetChar( ply )
+		local paid = ply:GetJEvasive() >= 1 or ( SERVER and side and not ply:GetJTrueRagdoll() and char.PayEvasive and char.PayEvasive( ply ) )
+		if SERVER and side and paid and not ply:GetJTrueRagdoll() then
 			JJS.Ragdoll.Stop( ply, "evasive" )
 			ply:SetJEvasive( 0 )
 			ply:SetJStunEnd( 0 )
@@ -149,7 +153,7 @@ function D.FindPunchTarget( ply, mv )
 	local yaw = mv:GetMoveAngles().y
 	local center = mv:GetOrigin() + Vector( 0, 0, 36 ) + U.YawForward( yaw ) * cfg.FrontHitCenter
 	U.LagComp( ply, true )
-	local list = U.PlayersInBox( center, yaw, cfg.FrontHitSize, { ignore = ply } )
+	local list = U.PlayersInBox( center, yaw, cfg.FrontHitSize, { ignore = ply, ragdolled = JJS.M1.Cfg( ply ).FrontDashBypass } )
 	U.LagComp( ply, false )
 	return list[ 1 ]
 end
@@ -217,6 +221,8 @@ JJS.RegisterAction( "dash_punch", {
 				fx = "light",
 			}
 			local nr = JJS.M1.Cfg( ply ).FrontDashStun
+			-- M1 setting FrontDashBypass: the front dash kicks grounded ragdolls too
+			if JJS.M1.Cfg( ply ).FrontDashBypass then hit.bypassRagdoll = true end
 			if var == 1 and nr then
 				-- M1 setting FrontDashStun: knocked backwards with stun instead of ragdolled
 				hit.stun = nr

@@ -34,6 +34,10 @@ end
 
 function M.TryStart( ply, mv )
 	if not mv:KeyDown( JJS.IN.M1 ) then return end
+	if JJS.IsImpaired( ply ) then return end
+	-- characters can replace the M1 (char.M1Override(ply, mv) -> true when handled: Lucky Coward's taunt)
+	local char = JJS.GetChar( ply )
+	if char.M1Override and char.M1Override( ply, mv ) then return end
 	local now = CurTime()
 	if now < ply:GetJM1CD() then return end
 	-- Side Dash M1: M1s can come out during a side/back dash (not a front dash)
