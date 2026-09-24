@@ -27,6 +27,7 @@
 --   onContact(ply, victim, p, result) whenever a hit connects (landed or blocked)
 --   parry = { window, counters = { melee = true, ... } }: hits taken this early in the move are parried
 --   feints = true: usable during another move (cancelling it), feintCooldown when it does
+--   m1Cancel = true: an M1 ends the move early
 --   detached = true: performed by a companion; the user only casts for `cast` seconds and the hits follow on their own
 --              (onDone(ply, target, p) once they all played out)
 --   comboWindow: combos can be pressed until this time into the move (default: the startup), from comboFrom
@@ -342,7 +343,8 @@ function K.AimTarget( ply, range, cone )
 	local best, bestDot = nil, cone or 0.93
 	for _, t in ipairs( player.GetAll() ) do
 		if t == ply or not t:Alive() then continue end
-		local base = t:GetPos()
+		local rag = t:GetJRagdolled() and t:GetJRagEnt() or nil
+		local base = IsValid( rag ) and rag:GetPos() - Vector( 0, 0, 20 ) or t:GetPos()
 		if base:Distance( eye ) > range + 40 then continue end
 		for _, z in ipairs( { 12, 36, 64 } ) do
 			local to = base + Vector( 0, 0, z ) - eye
@@ -433,6 +435,7 @@ local function Base( p )
 	return {
 		counter = Parry( p ),
 		kitParams = p,
+		m1Cancel = p.m1Cancel,
 		dur = Duration( p ),
 		moveMult = p.moveMult or 0.35,
 		noJump = p.noJump,

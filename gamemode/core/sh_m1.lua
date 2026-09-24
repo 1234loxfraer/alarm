@@ -38,6 +38,9 @@ function M.TryStart( ply, mv )
 	if now < ply:GetJM1CD() then return end
 	-- Side Dash M1: M1s can come out during a side/back dash (not a front dash)
 	local dash = ply:GetJDashType()
+	-- moves with m1Cancel (flights...) end on an M1
+	local act = JJS.GetAction( ply )
+	if act and act.m1Cancel and JJS.CanAct( ply ) then JJS.StopAction( ply, true ) end
 	if not JJS.CanAct( ply ) or JJS.IsBlocking( ply ) or dash == JJS.Dash.FRONT or JJS.IsBusy( ply ) then return end
 	if ply:GetJMoveState() == JJS.MOVE_WALLRUN then return end
 

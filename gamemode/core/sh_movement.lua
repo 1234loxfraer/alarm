@@ -435,6 +435,17 @@ function GM:Move( ply, mv )
 
 	local def = JJS.GetAction( ply )
 	if def and def.move and def.move( ply, mv, JJS.ActionTime( ply ), ply:GetJActVar() ) then return true end
+
+	-- hovering (air combos): suspended in the air, drifting slowly with the movement keys
+	if JJS.IsHovering( ply ) then
+		local yaw = mv:GetMoveAngles().y
+		local f, s = U.InputDir( mv )
+		local drift = ( U.YawForward( yaw ) * f + U.YawRight( yaw ) * s ) * 4 * JJS.STUD
+		local vel = mv:GetVelocity() * 0.8 + drift * 0.2
+		vel.z = 0
+		M.Slide( ply, mv, vel, FrameTime(), false )
+		return true
+	end
 end
 
 function GM:FinishMove( ply, mv )
