@@ -63,7 +63,10 @@
 --              steer (forward/back keys lengthen/shorten it, jump raises the arc)
 --   Buff       duration, speed, speedTime, evasive, awaken
 --   Zone       lingering area: radius, duration, tick, damage (per tick), follow (stays on the user), offset,
---              target = true (placed on the aimed target within range and follows them)
+--              target = true (placed on the aimed target within range and follows them), acting (only hits
+--              players performing an action, interrupting it), once (each target once), onPlace(ply, pos, p)
+--   AoE / Zone center(ply) -> position (or nil to cancel): placed there instead of in front of the user
+--   Beam       far = { dist, ragdoll, onHit } for targets hit beyond `dist` studs
 --   Domain     duration, sureHit ("damage", "stun", "drain"), dps, radius
 --   Toggle     switches to the alternate moveset (def.alt)
 --   Feint      cancels the startup of the move being performed and refunds its cooldown
@@ -603,9 +606,17 @@ local function FireRay( ply, p, tick )
 	U.LagComp( ply, false )
 
 	local stop = endPos
+	-- far = { dist, ragdoll = { h, v }, onHit }: targets hit beyond `dist` studs react differently (Root Swarm)
+	if p.far and not p.farP then
+		p.farP = table.Copy( p )
+		p.farP.far = nil
+		local r = p.far.ragdoll or {}
+		p.farP.ragdoll = { time = r.time or 1, h = ( r.h or -30 ) * S, v = ( r.v or 20 ) * S }
+		p.farP.onHit = p.far.onHit or p.onHit
+	end
 	for n, h in ipairs( hits ) do
 		if not p.pierce then stop = start + dir * h.dist end
-		K.Apply( ply, p, h.ply, tick, start )
+		K.Apply( ply, ( p.farP and h.dist > p.far.dist * S ) and p.farP or p, h.ply, tick, start )
 		if not p.pierce then break end
 		if n >= 8 then break end
 	end
@@ -655,6 +666,12 @@ IMPL.aoe = function( p )
 	local def = Base( p )
 	def.events = HitEvents( p, function( ply, i )
 		local center = U.BodyCenter( ply ) + K.Fwd( ply ) * p.offset + Vector( 0, 0, p.up or 0 )
+		-- center(ply) -> position: the area is placed elsewhere (a mark on the ground...)
+		if p.center then
+			center = p.center( ply )
+			if not center then return end
+			center = center + Vector( 0, 0, 36 )
+		end
 		for _, v in ipairs( K.SphereTargets( center, p.radius, ply, p.bypassRagdoll ) ) do
 			K.Apply( ply, p, v, i, center )
 		end
@@ -675,15 +692,20 @@ IMPL.target = function( p )
 		if not IsValid( v ) or not v:Alive() then return end
 		local reach = p.teleport == false and p.range + 60 or p.reach + 40
 		if v:GetPos():DistToSqr( ply:GetPos() ) > reach ^ 2 then return end
-		local r = K.Apply( ply, p, v, i )
-		if i == 1 and p.teleport == false then K.Effect( "jjs_kit_burst", U.BodyCenter( v ), nil, v, 40, p ) end
-		if i == 1 and p.pullIn and r == "hit" and not v:GetJRagdolled() then
+		-- pullIn: the first hit drags the target in front of the user (before it lands, so a ragdoll starts there)
+		local from
+		if i == 1 and p.pullIn and not v:GetJRagdolled() and not JJS.HasIFrames( v ) then
 			local pos = ply:GetPos() + K.Fwd( ply ) * 44
 			if U.HullFits( v, pos ) then
+				from = v:GetPos()
 				v:SetPos( pos )
 				v:SetLocalVelocity( vector_origin )
 			end
 		end
+		local r = K.Apply( ply, p, v, i )
+		-- a dodged or countered pull puts them back
+		if from and r ~= "hit" and r ~= "blocked" and r ~= "killed" then v:SetPos( from ) end
+		if i == 1 and p.teleport == false then K.Effect( "jjs_kit_burst", U.BodyCenter( v ), nil, v, 40, p ) end
 	end )
 	return def
 end
@@ -772,13 +794,16 @@ IMPL.zone = function( p )
 	def.events = { { p.startup, function( ply )
 		if CLIENT then return end
 		local center = ply:GetPos() + K.Fwd( ply ) * p.offset
+		if p.center then center = p.center( ply ) end
+		if not center then return end
 		local ent
 		if p.target then
 			ent = ply:GetJActTarget()
 			if not IsValid( ent ) then return end
 			center = ent:GetPos()
 		end
-		K.Zones[ #K.Zones + 1 ] = { owner = ply, p = p, pos = center, ent = ent, stop = CurTime() + p.duration, nextTick = CurTime() }
+		K.Zones[ #K.Zones + 1 ] = { owner = ply, p = p, pos = center, ent = ent, stop = CurTime() + p.duration, nextTick = CurTime(), done = {} }
+		if p.onPlace then p.onPlace( ply, center, p ) end
 	end } }
 	return def
 end
@@ -807,7 +832,13 @@ if SERVER then
 				local center = z.p.follow and ply:GetPos() or z.pos
 				if IsValid( z.ent ) then center = z.ent:GetPos() end
 				for _, v in ipairs( K.SphereTargets( center + Vector( 0, 0, 36 ), z.p.radius, ply, z.p.bypassRagdoll ) ) do
-					JJS.Hit( v, K.MakeHit( ply, z.p, v, 1, center ) )
+					-- acting: only players in the middle of a move (not blocking or side dashing); once: each target once
+					local acting = not z.p.acting or ( JJS.IsBusy( v ) or v:GetJDashType() == JJS.Dash.FRONT ) and not JJS.IsBlocking( v )
+					if acting and not ( z.p.once and z.done[ v ] ) then
+						z.done[ v ] = true
+						if z.p.acting and JJS.GetAction( v ) then JJS.StopAction( v, true ) end
+						JJS.Hit( v, K.MakeHit( ply, z.p, v, 1, center ) )
+					end
 				end
 				K.Effect( "jjs_kit_burst", center + Vector( 0, 0, 4 ), Vector( 0, 0, 1 ), ply, z.p.radius, z.p )
 			end
@@ -902,6 +933,7 @@ local function Detach( p, def )
 	local start = def.start
 	return {
 		kitParams = p,
+		detachedEvents = evs,
 		dur = p.cast or 0.15,
 		moveMult = 0.8,
 		gesture = "gesture_item_throw",
@@ -912,6 +944,16 @@ local function Detach( p, def )
 			K.Detached[ #K.Detached + 1 ] = { owner = ply, target = ply:GetJActTarget(), t0 = CurTime(), evs = evs, i = 1, p = p }
 		end,
 	}
+end
+
+-- Plays a detached move's hits without any action from the user (effects triggered in the middle of other moves)
+function K.Trigger( ply, ab, target )
+	if CLIENT or not ab or not ab.move then return end
+	local def = JJS.Actions[ ab.move.action ]
+	if not def or not def.detachedEvents then return end
+	local p = ab.move.p
+	if p.onUse then p.onUse( ply, p ) end
+	K.Detached[ #K.Detached + 1 ] = { owner = ply, target = target, t0 = CurTime(), evs = def.detachedEvents, i = 1, p = p }
 end
 
 if SERVER then
@@ -1132,6 +1174,7 @@ function Build( id, key, spec )
 
 	local p = Params( spec )
 	local move = { p = p, action = Register( name, p ) }
+	ab.move = move
 	local air = spec.air and { p = Params( spec, spec.air ) }
 	if air then air.action = Register( name .. ".air", air.p ) end
 	-- hold = { time, overrides } or a list of stages { { time, overrides }, ... } (the longest reached is used)

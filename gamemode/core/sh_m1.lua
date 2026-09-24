@@ -54,10 +54,19 @@ function M.TryStart( ply, mv )
 	JJS.StartAction( ply, "m1", idx + variant * 16 + alt )
 end
 
+-- cfg.Variants = { [variant] = { reach (studs), stun, block, bypassRagdoll, h, v, trueRag } } changes the final hit
 function M.FindTargets( ply, cfg, variant )
 	local yaw = ply:EyeAngles().y
-	local center = U.BodyCenter( ply ) + U.YawForward( yaw ) * cfg.HitCenter
-	return U.PlayersInBox( center, yaw, cfg.HitSize, { ignore = ply, ragdolled = variant == M.DOWN } )
+	local vo = cfg.Variants and cfg.Variants[ variant ]
+	local size, off = cfg.HitSize, cfg.HitCenter
+	if vo and vo.reach then
+		size = Vector( vo.reach * S, cfg.HitSize.y, cfg.HitSize.z )
+		off = vo.reach * S * 0.45
+	end
+	local center = U.BodyCenter( ply ) + U.YawForward( yaw ) * off
+	local rag = variant == M.DOWN
+	if vo and vo.bypassRagdoll ~= nil then rag = vo.bypassRagdoll end
+	return U.PlayersInBox( center, yaw, size, { ignore = ply, ragdolled = rag } )
 end
 
 -- Timings of hit `idx`: startup, action length, extra lock when blocked (seconds)
@@ -98,6 +107,18 @@ function M.BuildHit( ply, victim, cfg, idx, variant )
 			if victim:IsOnGround() or victim:GetJRagdolled() then vel = fwd * f.h * 0.3 + Vector( 0, 0, -10 * S ) end
 		end
 		hit.ragdoll = { time = f.ragdoll, vel = vel }
+		local vo = cfg.Variants and cfg.Variants[ variant ]
+		if vo then
+			if vo.h or vo.v then hit.ragdoll.vel = fwd * ( vo.h or f.h / S ) * S + Vector( 0, 0, ( vo.v or f.v / S ) * S ) end
+			if vo.block then hit.block = vo.block end
+			if vo.bypassRagdoll ~= nil then hit.bypassRagdoll = vo.bypassRagdoll end
+			if vo.trueRag then hit.ragdoll.trueRag = true end
+			if vo.stun then
+				hit.ragdoll = nil
+				hit.stun = vo.stun
+				hit.knock = fwd * ( vo.knock or 30 ) * S
+			end
+		end
 		-- FinalStun: the last hit knocks back with (evadable) stun instead, and reaches grounded ragdolls
 		if cfg.FinalStun then
 			hit.ragdoll = nil

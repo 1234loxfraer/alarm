@@ -131,6 +131,10 @@ function D.TryStart( ply, mv )
 		return
 	end
 
+	-- characters can replace the front dash (char.FrontDash(ply, mv) -> true when handled)
+	local char = JJS.GetChar( ply )
+	if char.FrontDash and now >= ply:GetJDashFrontCD() and char.FrontDash( ply, mv ) then return end
+
 	if now < ply:GetJDashFrontCD() then
 		-- anti-run: chasing a target that turned its back gives a forward quickstep
 		if now >= ply:GetJDashSideCD() and D.AntiRunTarget( ply ) then

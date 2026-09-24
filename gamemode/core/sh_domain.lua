@@ -5,6 +5,7 @@
 --   "damage"  damage over time (dps), reduced to 25% while blocking
 --   "stun"    members can't act (Infinite Void)
 --   "drain"   a meter drains near the caster; when empty the target is destroyed
+--   "acting"  any action other than running, side dashing or blocking is interrupted: stun and damage (dps = per punish)
 --   "motion"  moving hurts: damage by the member's (and the caster's) speed, blocking cuts it (Time Cell Moon Palace)
 --   "none"    no sure-hit (placeholder for domains with their own rules)
 -- Domains cast within ClashWindow of each other clash: sure-hits stop and each caster fills a
@@ -257,6 +258,17 @@ if SERVER then
 		local dmg = ( p.dps or 2 ) * dt * math.Clamp( speed / 250, 0, 3 )
 		if JJS.IsBlocking( v ) then dmg = dmg * ( p.blockMult or 0.25 ) end
 		if dmg > 0 then JJS.ApplyDamage( v, c, dmg, { type = JJS.DMG.DOMAIN } ) end
+	end
+
+	SURE.acting = function( d, p, v )
+		local front = v:GetJDashType() == JJS.Dash.FRONT
+		if ( JJS.IsBusy( v ) or front ) and ( v.jjs_domPunish or 0 ) < CurTime() then
+			v.jjs_domPunish = CurTime() + 0.8
+			if JJS.GetAction( v ) then JJS.StopAction( v, true ) end
+			v:SetJDashType( 0 )
+			JJS.Stun( v, 0.8 )
+			JJS.ApplyDamage( v, d:GetCaster(), p.dps or 4, { type = JJS.DMG.DOMAIN } )
+		end
 	end
 
 	SURE.stun = function( d, p, v )

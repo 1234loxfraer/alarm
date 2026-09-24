@@ -111,11 +111,10 @@ K.Character( "headofthehei", {
 
 	-- Projectionism: 2 per M1 (8 per string), no uppercuts or downslams; the last M1 always knocks back with evadable
 	-- stun and reaches grounded ragdolls (cancelling ragdoll-interruptible moves). Per-hit frames from dogslamloop.
-	-- TODO: the front dash becomes a second side dash (dash any direction, 0.45s between the two).
 	m1 = { Frames = { { 12, 7, 15 }, { 11, 9, 19 }, { 11, 9, 19 } }, Damage = { 2, 2, 2, 2 }, NoLaunch = true, FinalStun = 1.1 },
 
 	passives = {
-		{ "Projectionism", "2 per M1, no uppercut/downslam, the last M1 knocks back with stun; front dash = 2nd side dash (TODO)." },
+		{ "Projectionism", "2 per M1, no uppercut/downslam, the last M1 knocks back with stun; front dash = a 2nd side dash." },
 		{ "Frame Freeze", "Moves build Projection on targets (or the user on a miss); at 100% they freeze in a frame for 3s." },
 	},
 
@@ -218,6 +217,16 @@ K.Character( "headofthehei", {
 	},
 
 	SpeedMult = function( ply ) return ply:GetJAwakened() and 1.25 or 1 end,
+
+	-- Projectionism: the front dash is a second side dash (forward), 0.45s after the other one; it keeps its own cooldown
+	-- TODO: using the second charge in any direction
+	FrontDash = function( ply, mv )
+		local now = CurTime()
+		if now - ( ply:GetJDashSideCD() - JJS.Config.Dash.SideCooldown ) < 0.45 then return true end
+		JJS.Dash.Begin( ply, mv, JJS.Dash.SIDE, Vector( 1, 0, 0 ), true )
+		ply:SetJDashFrontCD( now + JJS.Config.Dash.SideCooldown )
+		return true
+	end,
 } )
 
 if SERVER then
