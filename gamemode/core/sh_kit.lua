@@ -30,7 +30,9 @@
 --   m1Cancel = true: an M1 ends the move early
 --   detached = true: performed by a companion; the user only casts for `cast` seconds and the hits follow on their own
 --              (onDone(ply, target, p) once they all played out)
---   comboWindow: combos can be pressed until this time into the move (default: the startup), from comboFrom
+--   comboWindow: combos can be pressed until this time into the move (default: the startup), from comboFrom;
+--   a combo's need(ply) must pass, onCombo(ply) when it triggers; combos can hold their own special/combo
+--   feintRefund = { except = slot } (with feints): the cancelled move stays off cooldown; zones: falloff
 --   meleeIFrames (seconds from the start: melee hits pass through), knock (studs/s push on each hit),
 --   knockBlock (the push also goes through block), hitKnock = { per hit push }, chase (studs/s run at the target
 --   between hits)
@@ -849,7 +851,10 @@ if SERVER then
 					if acting and not ( z.p.once and z.done[ v ] ) then
 						z.done[ v ] = true
 						if z.p.acting and JJS.GetAction( v ) then JJS.StopAction( v, true ) end
-						JJS.Hit( v, K.MakeHit( ply, z.p, v, 1, center ) )
+						local hit = K.MakeHit( ply, z.p, v, 1, center )
+						-- falloff: weaker the farther from the centre
+						if z.p.falloff then hit.damage = hit.damage * math.max( 0.05, 1 - v:GetPos():Distance( center ) / z.p.radius ) end
+						JJS.Hit( v, hit )
 					end
 				end
 				K.Effect( "jjs_kit_burst", center + Vector( 0, 0, 4 ), Vector( 0, 0, 1 ), ply, z.p.radius, z.p )
@@ -1099,6 +1104,7 @@ function K.TryCombo( ply, mv, slot )
 	if not c or at >= ( act.kitParams.comboWindow or act.kitParams.startup ) or at < ( act.kitParams.comboFrom or 0 ) then return false end
 	if not c.free and JJS.GetCooldown( ply, slot ) > CurTime() then return false end
 	if not ply:Alive() or ply:GetJRagdolled() or JJS.IsStunned( ply ) then return false end
+	if c.need and not c.need( ply ) then return false end
 	c.trigger( ply, mv, slot )
 	return true
 end
@@ -1108,6 +1114,7 @@ function K.TrySpecialVariant( ply, mv )
 	-- follow-up right after a move (Face Grater after Rapid Punches...)
 	local fa = ply.jjs_specialAfter
 	if fa and CurTime() < fa.t and ( ply.jjs_kitLanded or fa.ab.spec.anyway ) and ( fa.ab.spec.free or JJS.GetCooldown( ply, 5 ) <= CurTime() )
+		and ( not fa.ab.spec.need or fa.ab.spec.need( ply ) )
 		and ply:Alive() and not ply:GetJRagdolled() and not JJS.IsStunned( ply ) then
 		ply.jjs_specialAfter = nil
 		JJS.StopAction( ply, true )
@@ -1223,15 +1230,27 @@ function Build( id, key, spec )
 			V[ vk ].action = Register( name .. "." .. vk, V[ vk ].p )
 		end
 	end
-	-- combos: another key pressed during the startup (the special is combo slot 5)
-	local combos = {}
-	if spec.special then combos[ 5 ] = spec.special end
-	for slot, over in pairs( spec.combo or {} ) do combos[ slot ] = over end
-	local C = {}
-	for slot, over in pairs( combos ) do
-		C[ slot ] = { p = Params( spec, over ), over = over }
-		C[ slot ].action = Register( name .. ".combo" .. slot, C[ slot ].p )
+	-- combos: another key pressed during the startup (the special is combo slot 5). A combo's own `special` /
+	-- `combo` chain further (Rising Rage: special, then special again)
+	local function MakeCombos( base, prefix )
+		local combos = {}
+		if base.special then combos[ 5 ] = base.special end
+		for slot, over in pairs( base.combo or {} ) do combos[ slot ] = over end
+		local C = {}
+		for slot, over in pairs( combos ) do
+			-- nested combos inherit the parent combo's fields but not its own combos
+			local merged = over
+			if base ~= spec then
+				merged = table.Copy( base )
+				merged.special, merged.combo = nil, nil
+				for k, v in pairs( over ) do merged[ k ] = v end
+			end
+			C[ slot ] = { p = Params( spec, merged ), over = over, merged = merged }
+			C[ slot ].action = Register( prefix .. ".combo" .. slot, C[ slot ].p )
+		end
+		return C
 	end
+	local C = MakeCombos( spec, name )
 	V.special = C[ 5 ]
 	if spec.specialAfter then ab.specialAfter = Build( id, key .. ".after", spec.specialAfter ) end
 	if spec.miss then
@@ -1243,12 +1262,18 @@ function Build( id, key, spec )
 	ab.variants = V
 
 	-- another key (or the special) pressed during the startup switches to that combo variant
-	if next( C ) then
+	local function ComboList( C, depth )
 		local list = {}
 		for slot, c in pairs( C ) do
 			local over = c.over
+			-- deeper combos (the special pressed again during the combo)
+			if depth < 3 and ( over.special or over.combo ) then
+				local sub = MakeCombos( c.merged, c.action )
+				if next( sub ) then JJS.Actions[ c.action ].kitCombos = ComboList( sub, depth + 1 ) end
+			end
 			list[ slot ] = {
 				free = over.free,
+				need = over.need,
 				trigger = function( ply, mv, pressed )
 					local slot0 = ply:GetJActVar()
 					JJS.StopAction( ply, true )
@@ -1260,10 +1285,15 @@ function Build( id, key, spec )
 					end
 					-- the combo's own cooldown replaces the move's (Judgement's Reach leap: half cooldown)
 					if over.cooldown and slot0 >= 1 and slot0 <= 5 then JJS.SetCooldown( ply, slot0, over.cooldown ) end
+					if SERVER and over.onCombo then over.onCombo( ply ) end
 					Start( ply, mv, slot0, ab, c, true )
 				end,
 			}
 		end
+		return list
+	end
+	if next( C ) then
+		local list = ComboList( C, 1 )
 		for _, m in ipairs( { move, air, hold, V.airTarget, V.ragdolled, V.back, V.highAir } ) do
 			if m then JJS.Actions[ m.action ].kitCombos = list end
 		end
@@ -1326,9 +1356,13 @@ function Build( id, key, spec )
 		ab.Use = function( ply, mv, slot )
 			local act = JJS.GetAction( ply )
 			local feinted = act and act.kitParams and act.kitParams ~= p
+			local from = feinted and ply:GetJActVar()
 			if feinted then JJS.StopAction( ply, true ) end
 			use( ply, mv, slot )
 			if feinted and spec.feintCooldown then JJS.SetCooldown( ply, slot, spec.feintCooldown ) end
+			-- feintRefund = { except = slot }: the feinted move stays off cooldown
+			local fr = spec.feintRefund
+			if feinted and fr and from >= 1 and from <= 4 and from ~= fr.except then JJS.SetCooldown( ply, from, 0 ) end
 		end
 	end
 
@@ -1346,7 +1380,7 @@ function Build( id, key, spec )
 			if a.ab ~= ab then return a.ab.Again ~= nil and a.ab.Again( ply, mv, slot ) end
 			local act = JJS.GetAction( ply )
 			local own = act and ( act.name == name or act.name == name .. ".air" )
-			if not own and not DefaultCanUse( ply ) then return false end
+			if not own and not DefaultCanUse( ply ) and not ( ab.again.spec.feints and act and act.kitParams ) then return false end
 			if not ply:Alive() or ply:GetJRagdolled() or JJS.IsStunned( ply ) then return false end
 			ply.jjs_again[ slot ] = nil
 			ab.again.Use( ply, mv, 0 )

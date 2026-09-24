@@ -269,8 +269,10 @@ if SERVER then
 		if opts.again then Run( 0.15 ) Press( KEYS[ slot ] ) end
 		if opts.again2 then Run( 0.3 ) Press( KEYS[ slot ] ) end
 		if opts.feint then Run( 0.05 ) Press( KEYS[ slot ] ) end
+		if opts.special and A:GetJChar() == "starrage" then A:SetJRes1( 1 ) end -- mass for the mass variants
 		if opts.special then Run( 0.05 ) Press( JJS.IN.SPECIAL ) end
 		if opts.combo then Run( math.max( 0.05, ( ab.spec.comboFrom or 0 ) + 0.05 ) ) Press( KEYS[ opts.combo ] ) end
+		if opts.after and A:GetJChar() == "starrage" then A:SetJRes1( 1 ) end
 		if opts.after then Run( opts.after ) Press( JJS.IN.SPECIAL ) end
 		Run( opts.time or 3 )
 		local n = ( hits[ A ] or 0 ) - before
