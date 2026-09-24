@@ -53,7 +53,8 @@
 --   Rush       startup in place, then travel (studs over time seconds) with the hitbox active; the first
 --              target met is caught and takes the remaining hits (held in front); iframesOnHit (seconds)
 --   Beam       range, radius, pierce, duration (channelled), tick, clash (beam clash strength)
---   Projectile speed, range, radius, count, spread, explode (radius), explodeDamage, directOnly (no blast after a
+--   Projectile homing (steers at the target passed to K.SpawnProjectile), speed, range, radius, count, spread,
+--              explode (radius), explodeDamage, directOnly (no blast after a
 --              direct hit), gravity, guided (follows the owner's aim), ghost (passes through players),
 --              onExplode(ply, pos, hitSomeone, ent)
 --   Summon     a slow projectile (shikigami, swarms)
@@ -1343,8 +1344,9 @@ function Build( id, key, spec )
 				local held = mv and mv:KeyDown( KeyFor( slot ) )
 				if held and t < need + 1 then return end
 				local pick = K.PickVariant( ply, mv, p, V, air, move )
+				-- a stage can require something (need(ply): an orb...)
 				for _, st in ipairs( stages ) do
-					if t >= st.time then pick = st end
+					if t >= st.time and ( not st.p.need or st.p.need( ply ) ) then pick = st end
 				end
 				Start( ply, mv, slot, ab, pick, true )
 			end,

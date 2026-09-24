@@ -29,7 +29,7 @@ end
 
 if SERVER then
 	-- p: kit params (units); owner: player
-	function K.SpawnProjectile( owner, p, pos, dir )
+	function K.SpawnProjectile( owner, p, pos, dir, target )
 		local e = ents.Create( "jjs_projectile" )
 		if not IsValid( e ) then return end
 		e:SetPos( pos )
@@ -53,6 +53,7 @@ if SERVER then
 			left = p.range,
 			last = CurTime(),
 			hit = {},
+			target = target,
 		}
 		return e
 	end
@@ -88,8 +89,12 @@ if SERVER then
 		local p = st.p
 
 		if p.gravity then st.vel.z = st.vel.z - p.gravity * dt end
-		-- guided: flies where its owner looks (Bird Strike)
+		-- guided: flies where its owner looks (Bird Strike); homing: turns toward its target
 		if p.guided then st.vel = st.owner:GetAimVector() * st.vel:Length() end
+		if p.homing and IsValid( st.target ) and st.target:Alive() then
+			local to = ( U.BodyCenter( st.target ) - self:GetPos() ):GetNormalized()
+			st.vel = ( st.vel:GetNormalized() * 0.8 + to * 0.2 ):GetNormalized() * st.vel:Length()
+		end
 		local from = self:GetPos()
 		local step = st.vel * dt
 		local len = step:Length()
