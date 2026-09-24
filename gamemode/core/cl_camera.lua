@@ -27,7 +27,8 @@ local function Focus( ply )
 		local f = RagdollFocus( ply )
 		if f then return f, true end
 	end
-	return ply:GetPos() + Vector( 0, 0, cfg.FocusHeight ), false
+	local char = JJS.GetChar( ply )
+	return ply:GetPos() + Vector( 0, 0, cfg.FocusHeight * ( char and char.scale or 1 ) ), false
 end
 
 function GM:CalcView( ply, origin, angles, fov, znear, zfar )

@@ -22,6 +22,7 @@ JJS.DMG_NAMES = {
 	[ JJS.DMG.EXPLOSION ] = "Explosion",
 	[ JJS.DMG.SWARM ] = "Swarm",
 	[ JJS.DMG.DOMAIN ] = "Domain",
+	[ JJS.DMG.SPECIAL ] = "Special",
 }
 
 -- Players never collide with ragdolls; with each other only if jjs_player_collide is on

@@ -1,20 +1,53 @@
--- Awakening bar: fills with damage dealt (~286 to full). G awakens; characters can replace
--- the activation with their own sequence (char.Awaken). While awakened the bar shows the
--- time left and the character's awakening kit is used.
+-- Awakening bar: fills with damage dealt (~286 to full). G awakens:
+--   complete characters play a short invulnerable sequence, heal, then use their awakening
+--   kit for its duration (awakening.domain expands right away for domain awakenings);
+--   base-only characters perform their single awakening move instead (char.awakenMove).
+-- Characters can replace the activation with their own (char.Awaken) and react to G while
+-- awakened or at any time (char.AwakenPress returning true consumes the press).
+-- While awakened the bar shows the time left.
 
 local cfg = JJS.Config.Awakening
 
 function JJS.TryAwaken( ply, mv )
+	local char = JJS.GetChar( ply )
+	if char.AwakenPress and char.AwakenPress( ply, mv ) then return end
 	if ply:GetJAwakened() or ply:GetJAwaken() < 1 then return end
 	if not JJS.CanAct( ply ) or JJS.IsBusy( ply ) or JJS.IsDashing( ply ) then return end
 
-	local char = JJS.GetChar( ply )
 	if char.Awaken then
 		char.Awaken( ply, mv )
+	elseif char.awakenMove then
+		ply:SetJAwaken( 0 )
+		char.awakenMove.Use( ply, mv, 0 )
+		hook.Run( "JJS_AwakenMove", ply )
+	elseif char.awakening then
+		JJS.StartAction( ply, "awaken_seq" )
 	elseif SERVER then
-		JJS.EnterAwakening( ply )
+		-- early access characters without a proper awakening: heal and reset cooldowns
+		JJS.EnterAwakening( ply, nil, cfg.DefaultHeal )
 	end
 end
+
+JJS.RegisterAction( "awaken_seq", {
+	dur = cfg.SequenceTime,
+	moveMult = 0,
+	noJump = true,
+	uninterruptible = true,
+	armor = { all = true },
+	gesture = "gesture_becon",
+	start = function( ply )
+		JJS.IFrames( ply, cfg.SequenceTime )
+		if SERVER then JJS.Util.Effect( "jjs_kit_cast", JJS.Util.BodyCenter( ply ), nil, ply, 3, 1 ) end
+	end,
+	finish = function( ply, var, interrupted )
+		if CLIENT or not ply:Alive() then return end
+		local aw = JJS.GetChar( ply ).awakening or {}
+		JJS.EnterAwakening( ply, nil, aw.heal or cfg.DefaultHeal )
+		if aw.domain and aw.domain.spec then
+			JJS.Domain.Expand( ply, JJS.Kit.Params( aw.domain.spec ) )
+		end
+	end,
+} )
 
 function JJS.GetAwakeningDuration( ply )
 	local char = JJS.GetChar( ply )
@@ -26,6 +59,7 @@ function JJS.EnterAwakening( ply, duration, heal )
 	ply:SetJAwakened( true )
 	ply:SetJAwaken( 1 )
 	ply:SetJAwakenEnd( CurTime() + duration )
+	ply:SetJKitSet( 0 )
 	ply.jjs_awakenDur = duration
 	for i = 1, 5 do ply[ "SetJCD" .. i ]( ply, 0 ) end
 	if heal and SERVER then JJS.Heal( ply, heal ) end
@@ -36,6 +70,7 @@ function JJS.ExitAwakening( ply )
 	ply:SetJAwakened( false )
 	ply:SetJAwaken( 0 )
 	ply:SetJAwakenEnd( 0 )
+	ply:SetJKitSet( 0 )
 	for i = 1, 5 do ply[ "SetJCD" .. i ]( ply, 0 ) end
 	hook.Run( "JJS_AwakeningEnd", ply )
 end

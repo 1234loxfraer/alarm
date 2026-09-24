@@ -25,7 +25,20 @@ local function TrackAttacker( victim, attacker, now )
 			n = n + 1
 		end
 	end
-	if n >= 2 then victim:SetJBurstEnd( now + cfg.Burst.Window ) end
+	if n >= 2 then
+		victim:SetJBurstEnd( now + cfg.Burst.Window )
+		victim.jjs_burstWeak = false
+	end
+end
+
+-- Interrupted by a third party (someone other than the player you were fighting): a weaker
+-- burst that only heals and can't be chained
+local function ThirdPartyBurst( victim, attacker, now )
+	local fight = victim.jjs_fight
+	if not fight or not IsValid( fight.ent ) or fight.ent == attacker or now - fight.t > 3 then return end
+	if victim:GetJBurstEnd() > now then return end
+	victim:SetJBurstEnd( now + cfg.Burst.Window )
+	victim.jjs_burstWeak = true
 end
 
 function JJS.Heal( ply, amount )
@@ -136,6 +149,7 @@ function JJS.Hit( victim, hit )
 		return "killed"
 	end
 
+	local acting = JJS.IsBusy( victim )
 	if not armored then
 		local meleeImmune = hit.type == JJS.DMG.MELEE and victim:GetJMeleeImmuneEnd() > now
 
@@ -149,6 +163,11 @@ function JJS.Hit( victim, hit )
 			victim:SetJMoveState( JJS.MOVE_NONE )
 			if hit.knock then victim:SetLocalVelocity( hit.knock ) end
 		end
+	end
+
+	if IsValid( attacker ) and attacker:IsPlayer() and attacker ~= victim then
+		attacker.jjs_fight = { ent = victim, t = now }
+		if acting and not JJS.IsBusy( victim ) then ThirdPartyBurst( victim, attacker, now ) end
 	end
 
 	if hit.onHit then hit.onHit( victim, hit ) end

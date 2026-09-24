@@ -32,10 +32,11 @@ function GM:PlayerSpawn( ply, transition )
 	util.PrecacheModel( char.model )
 	ply:SetModel( char.model )
 	ply:SetupHands()
+	JJS.ApplyScale( ply )
 
-	ply:SetMaxHealth( cfg.MaxHealth )
-	ply:SetHealth( cfg.MaxHealth )
-	ply:SetJHP( cfg.MaxHealth )
+	ply:SetMaxHealth( char.hp )
+	ply:SetHealth( char.hp )
+	ply:SetJHP( char.hp )
 
 	ply:SetWalkSpeed( cfg.WalkSpeed )
 	ply:SetSlowWalkSpeed( cfg.WalkSpeed )
@@ -145,7 +146,38 @@ hook.Add( "Tick", "JJS_PlayerTick", function()
 	end
 end )
 
--- Character selection (a menu will come later)
+-- Turns a living player into another character on the spot (Ten Shadows' Mahoraga ritual..).
+-- The new character keeps the same health fraction; `revert` is restored on death.
+function JJS.Transform( ply, id, revert )
+	local char = JJS.Characters[ id ]
+	if not char or not ply:Alive() then return end
+	local frac = JJS.GetHealthFrac( ply )
+	if ply:GetJRagdolled() then JJS.Ragdoll.Stop( ply, "transform" ) end
+	JJS.StopAction( ply, true )
+	if ply:GetJAwakened() then JJS.ExitAwakening( ply ) end
+	ply:SetJChar( id )
+	ply:SetJKitSet( 0 )
+	ply:SetJMode( 0 )
+	ply:SetModel( char.model )
+	JJS.ApplyScale( ply )
+	ply:SetMaxHealth( char.hp )
+	local hp = math.max( 1, char.hp * frac )
+	ply:SetJHP( hp )
+	ply:SetHealth( math.ceil( hp ) )
+	for i = 1, 5 do ply[ "SetJCD" .. i ]( ply, 0 ) end
+	ply.jjs_revertChar = revert
+	if char.OnSpawn then char.OnSpawn( ply ) end
+	hook.Run( "JJS_Transformed", ply, id )
+end
+
+hook.Add( "JJS_PlayerDied", "JJS_TransformRevert", function( ply )
+	if ply.jjs_revertChar then
+		ply:SetJChar( ply.jjs_revertChar )
+		ply.jjs_revertChar = nil
+	end
+end )
+
+-- Character selection (F1 menu or console)
 concommand.Add( "jjs_char", function( ply, _, args )
 	if not IsValid( ply ) then return end
 	local id = args[ 1 ]
@@ -156,6 +188,7 @@ concommand.Add( "jjs_char", function( ply, _, args )
 		return
 	end
 	if ply:GetJChar() ~= id then
+		ply.jjs_revertChar = nil
 		ply:SetJChar( id )
 		ply:SetJAwaken( 0 ) -- awakening progress is lost when switching characters
 		if ply:Alive() then ply:Spawn() end

@@ -18,6 +18,7 @@ end
 function JJS.CanAct( ply )
 	return ply:Alive() and not ply:GetJRagdolled() and not JJS.IsStunned( ply ) and not JJS.InEndlag( ply )
 		and ply:GetJMoveState() ~= JJS.MOVE_ROLL and ply:GetJMoveState() ~= JJS.MOVE_VAULT and ply:GetJMoveState() ~= JJS.MOVE_CLIMB
+		and ply:GetJMoveState() ~= JJS.MOVE_SLIDE
 end
 
 function JJS.Stun( ply, seconds )

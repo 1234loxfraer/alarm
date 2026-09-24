@@ -147,3 +147,18 @@ function U.Effect( name, pos, normal, ent, scale, flags, magnitude, start )
 	if start then ed:SetStart( start ) end
 	util.Effect( name, ed, true, true )
 end
+
+-- Character size (Mahoraga is twice as big): model scale, hulls and view height. Called from
+-- spawn and SetupMove so both realms agree for prediction.
+function JJS.ApplyScale( ply )
+	local char = JJS.GetChar( ply )
+	local sc = char and char.scale or 1
+	if ply.jjs_scale == sc and ply:GetModelScale() == sc then return end
+	ply.jjs_scale = sc
+	if SERVER then ply:SetModelScale( sc, 0 ) end
+	ply:SetHull( Vector( -16, -16, 0 ) * sc, Vector( 16, 16, 72 ) * sc )
+	ply:SetHullDuck( Vector( -16, -16, 0 ) * sc, Vector( 16, 16, 36 ) * sc )
+	ply:SetViewOffset( Vector( 0, 0, 64 ) * sc )
+	ply:SetViewOffsetDucked( Vector( 0, 0, 28 ) * sc )
+	ply:SetStepSize( 18 * sc )
+end

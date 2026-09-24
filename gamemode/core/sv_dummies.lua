@@ -1,7 +1,7 @@
 -- Training dummies (see the JJS wiki "Dummy" page). They are bots, so they go through
 -- exactly the same code as real players. Needs a multiplayer session (max players >= 2).
 --
---   jjs_dummy [normal|lowhp|immortal|attack|block|evasive]   spawns one where you look
+--   jjs_dummy [normal|lowhp|immortal|attack|block|evasive|bullet|counter]   spawns one where you look
 --   jjs_dummy_clear                                          removes all dummies
 
 JJS.DUMMY = {
@@ -11,6 +11,8 @@ JJS.DUMMY = {
 	attack = 4,
 	block = 5,
 	evasive = 6,
+	bullet = 7,
+	counter = 8,
 }
 local NAMES = {
 	[ 1 ] = "Dummy",
@@ -19,6 +21,15 @@ local NAMES = {
 	[ 4 ] = "Attacking Dummy",
 	[ 5 ] = "Blocking Dummy",
 	[ 6 ] = "Evasive Dummy",
+	[ 7 ] = "Bullet Dummy",
+	[ 8 ] = "Counter Dummy",
+}
+
+-- Dummies that use a character's moves
+local KIND_CHAR = {
+	[ 4 ] = "vessel", -- Attacking Dummy: Vessel's M1s
+	[ 7 ] = "restlessgambler", -- Bullet Dummy: Reserve Balls
+	[ 8 ] = "vessel", -- Counter Dummy: Manji Kick
 }
 
 local IMMORTAL_HP = 99999
@@ -53,7 +64,8 @@ function JJS.SpawnDummy( kind, pos, ang )
 	local bot = player.CreateNextBot( NAMES[ kind ] or "Dummy" )
 	if not IsValid( bot ) then return nil, "Could not create a bot." end
 	bot.jjs_dummy = { kind = kind, pos = pos, ang = ang }
-	bot:SetJChar( JJS.Config.DefaultCharacter )
+	local char = KIND_CHAR[ kind ]
+	bot:SetJChar( char and JJS.Characters[ char ] and char or JJS.Config.DefaultCharacter )
 	bot:Spawn()
 	return bot
 end
@@ -62,6 +74,13 @@ function JJS.SetDummyKind( bot, kind )
 	if not bot.jjs_dummy then return end
 	bot.jjs_dummy.kind = kind
 	bot:SetJDummy( kind )
+end
+
+local function Face( bot, cmd, t )
+	-- bots don't take their facing from the command's view angles reliably; set both
+	local ang = ( JJS.Util.BodyCenter( t ) - bot:EyePos() ):Angle()
+	bot:SetEyeAngles( ang )
+	cmd:SetViewAngles( ang )
 end
 
 concommand.Add( "jjs_dummy", function( ply, _, args )
@@ -131,12 +150,20 @@ hook.Add( "StartCommand", "JJS_DummyBrain", function( bot, cmd )
 	elseif kind == JJS.DUMMY.attack then
 		local t = Nearest( bot, 8 * JJS.STUD )
 		if t then
-			-- bots don't take their facing from the command's view angles reliably; set both
-			local ang = ( JJS.Util.BodyCenter( t ) - bot:EyePos() ):Angle()
-			bot:SetEyeAngles( ang )
-			cmd:SetViewAngles( ang )
+			Face( bot, cmd, t )
 			cmd:AddKey( JJS.IN.M1 )
 		end
+	elseif kind == JJS.DUMMY.bullet then
+		-- the ability fires on the press, so alternate the key
+		local t = Nearest( bot, 60 * JJS.STUD )
+		if t then
+			Face( bot, cmd, t )
+			if not JJS.IsBusy( bot ) then bot:SetJCD1( 0 ) end -- dummies ignore cooldowns
+			if engine.TickCount() % 2 == 0 then cmd:AddKey( JJS.AbilityKeys[ 1 ] ) end
+		end
+	elseif kind == JJS.DUMMY.counter then
+		if not JJS.IsBusy( bot ) then bot:SetJCD4( 0 ) end
+		if engine.TickCount() % 2 == 0 then cmd:AddKey( JJS.AbilityKeys[ 4 ] ) end
 	elseif kind == JJS.DUMMY.evasive then
 		if ( bot:GetJRagdolled() and bot:GetJEvasive() >= 1 ) or bot:GetJBurstEnd() > CurTime() then
 			-- alternate the press so KeyPressed fires

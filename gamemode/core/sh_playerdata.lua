@@ -42,6 +42,8 @@ Def( "Float", 24, "MoveStart", 0 )
 Def( "Float", 25, "Res2", 0 )
 Def( "Float", 26, "HP", 100 ) -- exact health (Health() is an int)
 Def( "Float", 27, "DeathTime", 0 )
+Def( "Float", 28, "BuffEnd", 0 ) -- movement speed buff/debuff from moves
+Def( "Float", 29, "BuffMult", 1 )
 
 -- Ints
 Def( "Int", 0, "ActId", 0 )
@@ -51,6 +53,8 @@ Def( "Int", 3, "DashType", 0 ) -- 0 none, 1 front, 2 side
 Def( "Int", 4, "WallJumps", 3 )
 Def( "Int", 5, "MoveState", 0 ) -- JJS.MOVE_*
 Def( "Int", 6, "Dummy", 0 ) -- dummy kind, 0 = real player
+Def( "Int", 7, "KitSet", 0 ) -- 0 = main moveset, 1 = alternate set (Rika, Ten Shadows' switch..)
+Def( "Int", 8, "Mode", 0 ) -- character mode (Self-Transfiguration, Adaptation Wheel..)
 
 -- Bools
 Def( "Bool", 0, "Running", false )
@@ -78,6 +82,7 @@ JJS.MOVE_WALLRUN = 1
 JJS.MOVE_ROLL = 2
 JJS.MOVE_VAULT = 3
 JJS.MOVE_CLIMB = 4
+JJS.MOVE_SLIDE = 5
 
 -- Resets everything except the character and (optionally) the awakening bar
 function JJS.ResetPlayerData( ply, keepAwaken )

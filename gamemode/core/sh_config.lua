@@ -10,6 +10,7 @@ JJS.DMG = {
 	EXPLOSION = 3,
 	SWARM = 4,
 	DOMAIN = 5,
+	SPECIAL = 6, -- neither adaptable nor counterable
 }
 
 JJS.Config = {
@@ -108,6 +109,31 @@ JJS.Config = {
 	Awakening = {
 		FullDamage = 2000 / 7, -- ~286 damage dealt
 		DefaultDuration = 60,
+		DefaultHeal = 25,
+		SequenceTime = 1.6, -- invulnerable activation sequence
+	},
+
+	Domain = {
+		CastTime = 1.25,
+		Radius = 37.5 * S,
+		DefaultDuration = 14,
+		ClashWindow = 1, -- domains cast this close together clash
+		ClashTime = 15,
+		ClashPerHit = 0.0625, -- 16 hits fill the bar
+		BorderMargin = 4 * S, -- can't cast this close to another domain's border
+	},
+
+	BeamClash = {
+		Time = 4,
+		Range = 120 * S,
+		HeadStart = 2, -- presses per strength rank of difference
+		Keys = { IN_FORWARD, IN_MOVELEFT, IN_MOVERIGHT }, -- W, A, D
+	},
+
+	Slide = {
+		Time = 0.55,
+		GapMin = 30, -- clearance under the obstacle needed to slide
+		ProbeDistance = 40,
 	},
 
 	WallJump = {

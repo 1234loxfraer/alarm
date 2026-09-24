@@ -82,7 +82,7 @@ local function Wrap( text, w )
 	return lines
 end
 
-local function DrawMove( x, y, w, h, ab, key, cdEnd, now )
+local function DrawMove( x, y, w, h, ab, key, cdEnd, now, tip )
 	Box( x, y, w, h )
 	draw.SimpleText( key, "JJS_Key", x + S( 6 ), y + S( 4 ), C.dim )
 	if not ab then return end
@@ -93,8 +93,8 @@ local function DrawMove( x, y, w, h, ab, key, cdEnd, now )
 	for i, l in ipairs( lines ) do
 		draw.SimpleText( l, "JJS_Move", x + w / 2, ty + ( i - 1 ) * lh, C.text, TEXT_ALIGN_CENTER )
 	end
-	if ab.tip then
-		draw.SimpleText( ab.tip, "JJS_Tip", x + w / 2, y + h - S( 4 ), C.tip, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM )
+	if tip and tip ~= "" then
+		draw.SimpleText( tip, "JJS_Tip", x + w / 2, y + h - S( 4 ), C.tip, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM )
 	end
 
 	local left = cdEnd - now
@@ -105,6 +105,12 @@ local function DrawMove( x, y, w, h, ab, key, cdEnd, now )
 		draw.SimpleText( left >= 10 and string.format( "%d", left ) or string.format( "%.1f", left ),
 			"JJS_CD", x + w / 2, y + h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER )
 	end
+end
+
+local function TipOf( ab, ply, slot )
+	local tip = ab and ab.tip
+	if isfunction( tip ) then tip = tip( ply, slot ) end
+	return tip
 end
 
 local function DrawBar( x, y, w, h, frac, col, back )
@@ -138,7 +144,13 @@ local function DrawKit( ply, now )
 
 	for slot = 1, 4 do
 		local ab = JJS.GetAbility( ply, slot )
-		DrawMove( x0 + ( slot - 1 ) * ( bw + gap ), y0, bw, bh, ab, KeyName( B[ "a" .. slot ] ), JJS.GetCooldown( ply, slot ), now )
+		DrawMove( x0 + ( slot - 1 ) * ( bw + gap ), y0, bw, bh, ab, KeyName( B[ "a" .. slot ] ), JJS.GetCooldown( ply, slot ), now, TipOf( ab, ply, slot ) )
+	end
+
+	-- alternate moveset (Rika, Ten Shadows' switch..)
+	local set = JJS.GetKit( ply )
+	if ply:GetJKitSet() == 1 and set and set.name then
+		draw.SimpleText( string.upper( set.name ), "JJS_Small", x0, y0 - S( 26 ), char.color, TEXT_ALIGN_LEFT, TEXT_ALIGN_BOTTOM )
 	end
 
 	-- special + evasive bar to its left
@@ -149,6 +161,10 @@ local function DrawKit( ply, now )
 	DrawMove( sx, sy, sw, sw, special and { name = "", cooldown = special.cooldown } or nil, KeyName( B.special ), JJS.GetCooldown( ply, 5 ), now )
 	if special then
 		draw.SimpleText( special.name or "", "JJS_Tip", sx + sw / 2, sy + sw / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER )
+		local tip = TipOf( special, ply, 5 )
+		if tip and tip ~= "" then
+			draw.SimpleText( tip, "JJS_Tip", sx + sw / 2, sy - S( 3 ), C.tip, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM )
+		end
 	end
 
 	local ev = ply:GetJEvasive()
@@ -173,10 +189,13 @@ local function DrawKit( ply, now )
 	end
 	DrawBar( x0, ay, rowW, ah, fill, barCol )
 	local label
-	if awake then
+	if char.barName then
+		label = string.upper( char.barName )
+	elseif awake then
 		label = string.upper( char.awakening and char.awakening.name or "Awakened" )
 	elseif fill >= 1 then
 		label = "PRESS [" .. KeyName( B.awaken ) .. "] TO AWAKEN"
+		if char.awakenMove then label = label .. ": " .. string.upper( char.awakenMove.name or "" ) end
 	end
 	if label then
 		draw.SimpleText( label, "JJS_Awaken", x0 + rowW / 2, ay - S( 3 ), C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM )

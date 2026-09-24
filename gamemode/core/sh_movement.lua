@@ -94,6 +94,8 @@ function M.GetSpeed( ply, mv )
 	if busy then speed = speed * JJS.GetMoveMult( ply ) end
 	if JJS.InEndlag( ply ) then speed = speed * cfg.EndlagSpeedMult end
 
+	if ply:GetJBuffEnd() > CurTime() then speed = speed * ply:GetJBuffMult() end
+
 	local char = JJS.GetChar( ply )
 	if char and char.SpeedMult then speed = speed * char.SpeedMult( ply ) end
 	return speed
@@ -212,8 +214,26 @@ local function RollMove( ply, mv, t )
 end
 
 ------------------------------------------------------------------------------------------
--- Parkour: vault low obstacles, climb ledges while running
+-- Parkour: vault low obstacles, climb ledges, slide under raised ones while running
 ------------------------------------------------------------------------------------------
+
+-- Obstacle that blocks a standing player but leaves a gap a crouching one fits through
+local function CheckSlide( ply, mv, fwd )
+	local sc = cfg.Slide
+	local pos = mv:GetOrigin()
+	local mins, maxs = ply:GetHull()
+	local dmins, dmaxs = ply:GetHullDuck()
+	if dmaxs.z < sc.GapMin then return end
+	local ahead = pos + fwd * sc.ProbeDistance
+	local stand = U.MoveTrace( pos, ahead, mins, maxs, ply )
+	if not stand.Hit or stand.StartSolid or stand.HitNormal.z > 0.5 then return end
+	local duck = U.MoveTrace( pos, ahead, dmins, dmaxs, ply )
+	if duck.Hit then return end
+	ply:SetJMoveState( JJS.MOVE_SLIDE )
+	ply:SetJMoveStart( CurTime() )
+	ply:SetJMoveA( fwd )
+	hook.Run( "JJS_Parkour", ply, "slide", 0 )
+end
 
 function M.CheckParkour( ply, mv )
 	if not ply:GetJRunning() or not ply:IsOnGround() or ply:GetJMoveState() ~= JJS.MOVE_NONE then return end
@@ -226,7 +246,11 @@ function M.CheckParkour( ply, mv )
 
 	local knee = pos + Vector( 0, 0, step + 4 )
 	local tr = U.MoveTrace( knee, knee + fwd * pc.ProbeDistance, Vector( -12, -12, 0 ), Vector( 12, 12, 4 ), ply )
-	if not tr.Hit or tr.StartSolid or tr.HitNormal.z > 0.5 then return end
+	if not tr.Hit then
+		CheckSlide( ply, mv, fwd )
+		return
+	end
+	if tr.StartSolid or tr.HitNormal.z > 0.5 then return end
 
 	local probe = tr.HitPos + fwd * 14
 	local down = TraceWorld( probe + Vector( 0, 0, pc.ClimbMaxHeight - step ), Vector( probe.x, probe.y, pos.z ) )
@@ -301,12 +325,29 @@ local function ParkourMove( ply, mv, t, state )
 	return true
 end
 
+-- The engine keeps moving (and crouching) the player; we only keep the momentum up
+local function SlideMove( ply, mv, t )
+	local u = t / cfg.Slide.Time
+	local dir = ply:GetJMoveA()
+	local vz = mv:GetVelocity().z
+	if u >= 1 then
+		ply:SetJMoveState( JJS.MOVE_NONE )
+		ply:SetJMoveStart( CurTime() )
+		return false
+	end
+	local v = dir * cfg.RunSpeed * ( 1.25 - 0.35 * u )
+	v.z = vz
+	mv:SetVelocity( v )
+	return false
+end
+
 function M.StateMove( ply, mv )
 	local state = ply:GetJMoveState()
 	if state == JJS.MOVE_NONE then return false end
 	local t = CurTime() - ply:GetJMoveStart()
 	if state == JJS.MOVE_WALLRUN then return WallRunMove( ply, mv, t ) end
 	if state == JJS.MOVE_ROLL then return RollMove( ply, mv, t ) end
+	if state == JJS.MOVE_SLIDE then return SlideMove( ply, mv, t ) end
 	return ParkourMove( ply, mv, t, state )
 end
 
@@ -322,6 +363,7 @@ function GM:SetupMove( ply, mv, cmd )
 	if not ply:Alive() then return end
 	local now = CurTime()
 	local pt = ply:GetTable()
+	JJS.ApplyScale( ply )
 
 	if SERVER then
 		local sl = ply:IsBot() or ply:GetInfoNum( "jjs_shiftlock", 1 ) ~= 0
@@ -379,6 +421,10 @@ function GM:SetupMove( ply, mv, cmd )
 		mv:SetSideSpeed( 0 )
 	end
 	if not M.CanJump( ply ) then StripKey( mv, IN_JUMP ) end
+	if ply:GetJMoveState() == JJS.MOVE_SLIDE then
+		mv:SetButtons( bit.bor( mv:GetButtons(), IN_DUCK ) )
+		StripKey( mv, IN_JUMP )
+	end
 end
 
 function GM:Move( ply, mv )
@@ -394,6 +440,7 @@ end
 function GM:FinishMove( ply, mv )
 	if not ply:Alive() then return end
 	JJS.TickAction( ply, mv )
+	JJS.Domain.Barrier( ply, mv )
 
 	local pt = ply:GetTable()
 	if SERVER and pt.jjs_pendingVel then

@@ -65,6 +65,13 @@ function D.Burst( ply )
 	ply:SetJBurstEnd( 0 )
 	ply.jjs_hitters = {}
 	JJS.Heal( ply, bc.Heal )
+	if ply.jjs_burstWeak then
+		-- third party interruption: heal only
+		ply.jjs_burstWeak = nil
+		U.Effect( "jjs_burst", ply:GetPos() + Vector( 0, 0, 40 ), nil, ply, 0.6 )
+		hook.Run( "JJS_Burst", ply, true )
+		return
+	end
 	ply:SetJEvasive( 1 )
 	ply:SetJStunEnd( 0 )
 	ply:SetJEndlagEnd( 0 )

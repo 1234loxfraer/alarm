@@ -33,6 +33,10 @@ local CORE = {
 	"sh_characters.lua",
 	"sh_actions.lua",
 	"sh_combat.lua",
+	"sh_kit.lua",
+	"sh_kit_ents.lua",
+	"sh_domain.lua",
+	"sh_clash.lua",
 	"sv_combat.lua",
 	"sv_ragdoll.lua",
 	"sh_m1.lua",
@@ -46,6 +50,8 @@ local CORE = {
 	"cl_fx.lua",
 	"cl_camera.lua",
 	"cl_hud.lua",
+	"cl_kit_fx.lua",
+	"cl_menu.lua",
 	"sh_autotest.lua",
 }
 
