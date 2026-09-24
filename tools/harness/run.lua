@@ -296,12 +296,12 @@ if SERVER then
 			if V.special then TrySlot( "special", slot, { special = true } ) end
 			if V.highAir then TrySlot( "highAir", slot, { highAir = true } ) end
 			if ab and ab.specialAfter then TrySlot( "after", slot, { after = 1.2 } ) end
-			if V.cond then
-				local c = ab.spec.cond
-				local test = c.test
-				c.test = function() return true end
-				TrySlot( "cond", slot, {} )
-				c.test = test
+			-- each conditional variant in turn (the others forced off)
+			for i, c in ipairs( V.conds or {} ) do
+				local saved = {}
+				for j, o in ipairs( V.conds ) do saved[ j ] = o.test o.test = function() return j == i end end
+				TrySlot( "cond" .. ( i > 1 and i or "" ), slot, {} )
+				for j, o in ipairs( V.conds ) do o.test = saved[ j ] end
 			end
 			for cs in pairs( ab and ab.spec and ab.spec.combo or {} ) do TrySlot( "combo" .. cs, slot, { combo = cs } ) end
 			if ab and ab.again and ab.again.again then TrySlot( "again2", slot, { again = true, again2 = true } ) end
@@ -348,12 +348,12 @@ if SERVER then
 				if V.special then TrySlot( "awk-special", slot, { special = true } ) end
 				if V.highAir then TrySlot( "awk-highAir", slot, { highAir = true } ) end
 				if ab and ab.specialAfter then TrySlot( "awk-after", slot, { after = 1.2 } ) end
-				if V.cond then
-					local c = ab.spec.cond
-					local test = c.test
-					c.test = function() return true end
-					TrySlot( "awk-cond", slot, {} )
-					c.test = test
+				-- each conditional variant in turn (the others forced off)
+				for i, c in ipairs( V.conds or {} ) do
+					local saved = {}
+					for j, o in ipairs( V.conds ) do saved[ j ] = o.test o.test = function() return j == i end end
+					TrySlot( "awk-cond" .. ( i > 1 and i or "" ), slot, {} )
+					for j, o in ipairs( V.conds ) do o.test = saved[ j ] end
 				end
 				for cs in pairs( ab and ab.spec and ab.spec.combo or {} ) do TrySlot( "awk-combo" .. cs, slot, { combo = cs } ) end
 				if ab and ab.again and ab.again.again then TrySlot( "awk-again2", slot, { again = true, again2 = true } ) end

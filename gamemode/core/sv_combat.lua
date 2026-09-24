@@ -136,7 +136,8 @@ function JJS.Hit( victim, hit )
 	local fxPos, fxDir = HitPos( victim, from )
 
 	if hit.block ~= "none" and JJS.IsBlocking( victim ) and not victim:GetJRagdolled() then
-		local facing = hit.block == "all" or U.IsFacing( victim, from )
+		-- a staggered arm narrows the block to the front (~50 degrees each side)
+		local facing = hit.block == "all" or U.IsFacing( victim, from, victim:GetNW2Float( "JJSArmStagger", 0 ) > now and 0.65 or nil )
 		local early = hit.block ~= "pre" or victim:GetJBlockStart() <= ( hit.startTime or now )
 		if facing and early then
 			if hit.blockDamage and hit.blockDamage > 0 then

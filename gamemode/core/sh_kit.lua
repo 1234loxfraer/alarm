@@ -16,7 +16,8 @@
 --   onHit(ply, victim, p) when the final hit lands
 --   awakenCost (fraction of the awakening bar spent), noCooldown, charges (uses per cooldown)
 --   slow = { mult, time } applied to targets hit, onEnd(ply, p) when the move finishes uninterrupted,
---   onFinish(ply, p, interrupted) whenever it ends; noKill (the hits leave the target at 1 HP at worst)
+--   onFinish(ply, p, interrupted) whenever it ends; noKill (the hits leave the target at 1 HP at worst), noKillHits
+--   = { [hit] = true }; behind (the hitbox is behind the user)
 --   backstep (studs travelled backward during the startup)
 --   hitDamage = { per hit }, hitBlock = { per hit block rule }, hitBypass = { per hit: hits ragdolls }
 --   A variant's own `cooldown` replaces the move's cooldown when that variant is used.
@@ -229,6 +230,7 @@ function K.MakeHit( ply, p, victim, idx, from )
 		fx = last and "heavy" or "light",
 		stun = last and ( p.stun or 0.75 ) or math.max( p.interval + 0.4, 0.75 ),
 		kit = p,
+		noKill = p.noKill or ( p.noKillHits and p.noKillHits[ idx ] ) or nil,
 	}
 	if last and p.ragdoll then
 		local away = U.Flat( victim:GetPos() - ( from or ply:GetPos() ) )
@@ -252,7 +254,10 @@ function K.Apply( ply, p, victim, idx, from )
 	local hit = K.MakeHit( ply, p, victim, idx, from )
 	-- interrupting the target's action (a move or a dash, not a block) upgrades the hit
 	local it = p.interrupt
-	if it and ( JJS.IsBusy( victim ) or JJS.IsDashing( victim ) ) and not JJS.IsBlocking( victim ) then
+	-- hit.interrupting: the target was in the middle of a move or a dash; hit.guarding: they were blocking
+	hit.guarding = JJS.IsBlocking( victim )
+	hit.interrupting = ( JJS.IsBusy( victim ) or JJS.IsDashing( victim ) ) and not hit.guarding
+	if it and hit.interrupting then
 		hit.damage = hit.damage + ( it.damage or 0 )
 		if it.stun then hit.stun = it.stun hit.ragdoll = nil end
 		if it.ragdoll then
@@ -302,6 +307,8 @@ end
 
 function K.BoxTargets( ply, p )
 	local yaw = ply:EyeAngles().y
+	-- behind: the hitbox is behind the user (Reverse Kick)
+	if p.behind then yaw = yaw + 180 end
 	local center = U.BodyCenter( ply ) + U.YawForward( yaw ) * ( p.reach / 2 + 8 )
 	U.LagComp( ply, true )
 	local list = U.PlayersInBox( center, yaw, Vector( p.reach, p.width, p.height ), { ignore = ply, ragdolled = p.bypassRagdoll or p.hitBypass ~= nil } )
@@ -779,7 +786,7 @@ end
 if SERVER then
 	-- noKill moves leave their target at 1 HP
 	hook.Add( "JJS_PreventDeath", "JJS_KitNoKill", function( victim, attacker, dmg, hit )
-		if hit and hit.kit and hit.kit.noKill then
+		if hit and hit.noKill then
 			victim:SetJHP( 1 )
 			victim:SetHealth( 1 )
 			return true
@@ -1008,7 +1015,11 @@ end
 
 -- Chooses the variant for the current situation: direction, target state, then the user's
 function K.PickVariant( ply, mv, p, V, air, move )
-	if V.cond and p.cond.test( ply ) then return V.cond end
+	if V.conds then
+		for _, c in ipairs( V.conds ) do
+			if c.test( ply ) then return c end
+		end
+	end
 	if V.back and mv and mv:GetForwardSpeed() < 0 then return V.back end
 	if V.airTarget or V.ragdolled then
 		local t = p.kind == "target" and K.AimTarget( ply, p.range, p.cone ) or K.FrontTarget( ply, p )
@@ -1141,7 +1152,17 @@ function Build( id, key, spec )
 
 	-- conditional variants
 	local V = {}
-	for _, vk in ipairs( { "airTarget", "ragdolled", "back", "highAir", "cond" } ) do
+	-- cond = { test, overrides } or a list of them (the first whose test passes is used)
+	if spec.cond then
+		V.conds = {}
+		for i, c in ipairs( spec.cond[ 1 ] and spec.cond or { spec.cond } ) do
+			local v = { p = Params( spec, c ), test = c.test }
+			v.action = Register( name .. ".cond" .. ( i > 1 and i or "" ), v.p )
+			V.conds[ i ] = v
+		end
+		V.cond = V.conds[ 1 ]
+	end
+	for _, vk in ipairs( { "airTarget", "ragdolled", "back", "highAir" } ) do
 		if spec[ vk ] then
 			V[ vk ] = { p = Params( spec, spec[ vk ] ) }
 			V[ vk ].action = Register( name .. "." .. vk, V[ vk ].p )
@@ -1188,9 +1209,10 @@ function Build( id, key, spec )
 				end,
 			}
 		end
-		for _, m in ipairs( { move, air, hold, V.airTarget, V.ragdolled, V.back, V.highAir, V.cond } ) do
+		for _, m in ipairs( { move, air, hold, V.airTarget, V.ragdolled, V.back, V.highAir } ) do
 			if m then JJS.Actions[ m.action ].kitCombos = list end
 		end
+		for _, m in ipairs( V.conds or {} ) do JJS.Actions[ m.action ].kitCombos = list end
 	end
 
 	if stages then
@@ -1203,7 +1225,7 @@ function Build( id, key, spec )
 			think = function( ply, t, mv, slot )
 				local held = mv and mv:KeyDown( KeyFor( slot ) )
 				if held and t < need + 1 then return end
-				local pick = move
+				local pick = K.PickVariant( ply, mv, p, V, air, move )
 				for _, st in ipairs( stages ) do
 					if t >= st.time then pick = st end
 				end
@@ -1223,7 +1245,12 @@ function Build( id, key, spec )
 
 	ab.Use = function( ply, mv, slot )
 		-- a conditional variant takes over the hold (Offloaded Ultra Cannon...)
-		if spec.hold and not ( V.cond and p.cond.test( ply ) ) then
+		local condHit = false
+		for _, c in ipairs( V.conds or {} ) do
+			if c.test( ply ) then condHit = true break end
+		end
+		-- airborne, the air variant is used right away (it can't be held)
+		if spec.hold and not condHit and not ( air and not ply:IsOnGround() ) then
 			JJS.SetCooldown( ply, slot, ab.cooldown )
 			JJS.StartAction( ply, name .. ".charge", slot )
 			return

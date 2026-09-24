@@ -116,6 +116,7 @@ function D.TryStart( ply, mv )
 
 	if not JJS.CanAct( ply ) or JJS.IsBlocking( ply ) or JJS.IsDashing( ply ) then return end
 	if ply:GetJMoveState() == JJS.MOVE_WALLRUN then return end
+	if ply:GetNW2Float( "JJSLegStagger", 0 ) > now then return end -- a staggered leg can't dash
 
 	local act = JJS.GetAction( ply )
 	if act then

@@ -21,6 +21,10 @@ function JJS.CanAct( ply )
 		and ply:GetJMoveState() ~= JJS.MOVE_SLIDE
 end
 
+-- Staggered limbs (Salaryman's Ratio): an arm lowers the block angle, a leg disables dashes
+function JJS.StaggerArm( ply, seconds ) ply:SetNW2Float( "JJSArmStagger", math.max( ply:GetNW2Float( "JJSArmStagger", 0 ), CurTime() + seconds ) ) end
+function JJS.StaggerLeg( ply, seconds ) ply:SetNW2Float( "JJSLegStagger", math.max( ply:GetNW2Float( "JJSLegStagger", 0 ), CurTime() + seconds ) ) end
+
 function JJS.Stun( ply, seconds )
 	ply:SetJStunEnd( math.max( ply:GetJStunEnd(), CurTime() + seconds ) )
 end
