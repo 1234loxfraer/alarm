@@ -36,6 +36,9 @@ end
 function JJS.IsImpaired( ply ) return ply:GetNW2Float( "JJSImpaired", 0 ) > CurTime() end
 function JJS.Impair( ply, seconds ) ply:SetNW2Float( "JJSImpaired", math.max( ply:GetNW2Float( "JJSImpaired", 0 ), CurTime() + seconds ) ) end
 
+-- Blinded: the screen goes dark (client overlay)
+function JJS.Blind( ply, seconds ) ply:SetNW2Float( "JJSBlind", math.max( ply:GetNW2Float( "JJSBlind", 0 ), CurTime() + seconds ) ) end
+
 function JJS.Stun( ply, seconds )
 	ply:SetJStunEnd( math.max( ply:GetJStunEnd(), CurTime() + seconds ) )
 end

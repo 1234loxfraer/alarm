@@ -223,6 +223,13 @@ function GM:HUDPaint()
 	if not IsValid( ply ) then return end
 	local now = CurTime()
 
+	-- blinded (Earthen Insects' substance, Jawbreaker's blur)
+	local blind = ply:GetNW2Float( "JJSBlind", 0 ) - now
+	if blind > 0 then
+		surface.SetDrawColor( 10, 8, 6, 235 * math.min( 1, blind / 0.5 ) )
+		surface.DrawRect( 0, 0, ScrW(), ScrH() )
+	end
+
 	DrawHealth( ply )
 	DrawKit( ply, now )
 	DrawCursor( ply )

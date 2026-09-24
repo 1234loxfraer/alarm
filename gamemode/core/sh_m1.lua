@@ -15,6 +15,8 @@ M.NEUTRAL, M.UP, M.DOWN = 0, 1, 2
 -- The M1 settings in use: the awakening's own (awakening.m1) while awakened
 function M.Cfg( ply )
 	local char = JJS.GetChar( ply )
+	-- char.M1Alt(ply) -> true: the m1Alt string is used (Black Death unarmed...)
+	if char.M1Alt and char.m1altcfg and char.M1Alt( ply ) then return char.m1altcfg end
 	if ply:GetJAwakened() and char.awakening and char.awakening.m1cfg then return char.awakening.m1cfg end
 	return char.m1
 end
