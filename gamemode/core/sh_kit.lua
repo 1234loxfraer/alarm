@@ -48,7 +48,8 @@
 --
 -- Kinds and their own fields:
 --   Melee      reach, width, height, lunge (studs travelled during the startup)
---   Grab       like Melee; a caught target is held in front for the remaining hits
+--   Grab       like Melee; a caught target is held in front for the remaining hits; carry (studs/s flight with them
+--              along the aim), onCrash(ply, target, p) against walls (crashes = max count)
 --   Rush       startup in place, then travel (studs over time seconds) with the hitbox active; the first
 --              target met is caught and takes the remaining hits (held in front); iframesOnHit (seconds)
 --   Beam       range, radius, pierce, duration (channelled), tick, clash (beam clash strength)
@@ -451,6 +452,7 @@ local function Base( p )
 		start = function( ply )
 			ply.jjs_kitBlocked = nil
 			ply.jjs_kitLanded = nil
+			ply.jjs_crashes = nil
 			if p.iframes then JJS.IFrames( ply, p.iframes ) end
 			if p.awakenCost and not ply:GetJAwakened() then ply:SetJAwaken( math.max( 0, ply:GetJAwaken() - p.awakenCost ) ) end
 			if SERVER and p.selfDamage then JJS.ApplyDamage( ply, nil, p.selfDamage, { type = JJS.DMG.SPECIAL } ) end
@@ -518,9 +520,22 @@ IMPL.melee = function( p )
 	return def
 end
 
+-- carry = studs/s: after the grab lands, the user flies along their aim with the target until the last hit;
+-- hitting a wall calls onCrash(ply, target, p) (at most crashes = n times)
+local function Carry( p, lunge )
+	if not p.carry then return lunge end
+	return function( ply, mv, t )
+		if lunge and lunge( ply, mv, t ) then return true end
+		local v = ply:GetJActTarget()
+		if t < p.startup or t >= p.startup + ( p.hits - 1 ) * p.interval or not IsValid( v ) then return false end
+		JJS.Move.Slide( ply, mv, ply:GetAimVector() * p.carry * S, FrameTime(), false )
+		return true
+	end
+end
+
 IMPL.grab = function( p )
 	local def = Base( p )
-	def.move = Lunge( p )
+	def.move = Carry( p, Lunge( p ) )
 	def.events = HitEvents( p, function( ply, i )
 		if i == 1 then
 			local v = K.BoxTargets( ply, p )[ 1 ]
@@ -542,6 +557,16 @@ IMPL.grab = function( p )
 		if CLIENT or t < p.startup then return end
 		local v = ply:GetJActTarget()
 		if not IsValid( v ) or not v:Alive() or v:GetJRagdolled() then return end
+		-- carried into a wall
+		if p.carry and p.onCrash and ( ply.jjs_crashes or 0 ) < ( p.crashes or 3 ) and ( ply.jjs_crashT or 0 ) < CurTime() then
+			local c = U.BodyCenter( ply )
+			local tr = util.TraceLine( { start = c, endpos = c + ply:GetAimVector() * 5 * S, mask = MASK_SOLID_BRUSHONLY } )
+			if tr.Hit then
+				ply.jjs_crashes = ( ply.jjs_crashes or 0 ) + 1
+				ply.jjs_crashT = CurTime() + 0.4
+				p.onCrash( ply, v, p )
+			end
+		end
 		local pos = ply:GetPos() + K.Fwd( ply ) * 40
 		if U.HullFits( v, pos ) then v:SetPos( pos ) end
 		v:SetLocalVelocity( vector_origin )
