@@ -232,7 +232,7 @@ function R.Tick( ply, now, dt )
 	if not st then return end
 
 	local rag = st.ent
-	local pelvis = IsValid( rag ) and Pelvis( rag )
+	local pelvis = IsValid( rag ) and Pelvis( rag ) or nil
 	if not IsValid( pelvis ) then
 		if st.dead then return end
 		R.Stop( ply, "lost" )

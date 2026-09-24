@@ -11,7 +11,8 @@
 -- Domains cast within ClashWindow of each other clash: sure-hits stop and each caster fills a
 -- bar by landing hits on the other casters; the winner keeps their domain, the rest break.
 -- Invasion (Chimera Shadow Garden, Black Death's roaches): while a domain is invaded its barrier is open (anyone
--- can enter or leave) and its sure-hit is off; D.Invade( d, ply ) / D.EndInvasion( d ).
+-- can enter or leave) and its sure-hit is off unless the invasion keeps it; D.Invade( d, ply, keepSureHit ) /
+-- D.EndInvasion( d ).
 
 local U = JJS.Util
 local K = JJS.Kit
@@ -174,8 +175,9 @@ if SERVER then
 		d:Remove()
 	end
 
-	function D.Invade( d, ply )
+	function D.Invade( d, ply, keepSureHit )
 		if not IsValid( d ) then return end
+		d.jjs_invadeKeep = keepSureHit
 		d:SetInvader( ply )
 		hook.Run( "JJS_DomainInvaded", d, ply )
 	end
@@ -358,8 +360,8 @@ if SERVER then
 				continue
 			end
 
-			-- invaded: no sure-hit while the hole stays open
-			if D.Invaded( d ) then continue end
+			-- invaded: no sure-hit while the hole stays open (Chimera Shadow Garden)
+			if D.Invaded( d ) and not d.jjs_invadeKeep then continue end
 
 			local p = d.jjs or {}
 			local fn = SURE[ p.sureHit or "damage" ] or SURE.none

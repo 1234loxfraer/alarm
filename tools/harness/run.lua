@@ -242,6 +242,10 @@ if SERVER then
 		for k in pairs( JJS.Kit.Detached ) do JJS.Kit.Detached[ k ] = nil end
 		A:SetNW2Entity( "JJSDomain", NULL )
 		B:SetNW2Entity( "JJSDomain", NULL )
+		-- extra players left by a previous test (Black Death's offspring...)
+		for _, p in ipairs( player.GetAll() ) do
+			if p ~= A and p ~= B then p:Kick() end
+		end
 		Run( 0.1 )
 	end
 

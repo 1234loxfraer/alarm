@@ -25,6 +25,11 @@ local MARK = K.Build( "aspiringmangaka", "mark", K.Target{ "Clairvoyance", telep
 		if IsValid( t ) then Mark( ply, t ) end
 	end } )
 
+-- Despair's slowed flurry: the thrusts left after a whiff or a block by an unmarked target
+local DESPAIR_SLOW = K.Build( "aspiringmangaka", "despairslow", K.Melee{ "Despair", startup = 0.22, hits = 5, interval = 0.26,
+	hitDamage = { 3, 3, 3, 3, 1.1 }, hitBlock = { "normal", "normal", "normal", "normal", "none" }, reach = 10, width = 5, type = "melee",
+	bypassRagdoll = true, ragdoll = { h = 60, v = 18 } } )
+
 -- Prediction: a marked enemy in front, not ragdolled or mid-move, is forced into a side/back dash toward the user
 local function Predict( ply )
 	local t = K.AimTarget( ply, 60 * S, 0.8 )
@@ -64,11 +69,13 @@ K.Character( "aspiringmangaka", {
 	},
 
 	abilities = {
-		-- Rapid thrusts of the staff (5 x 3) then an unblockable slash sending the enemy flying (1.1). Semi blockable; it
-		-- slows down on a miss or when blocked by an unmarked target (TODO: the slowdown).
+		-- Rapid thrusts of the staff (5 x 3) then an unblockable slash sending the enemy flying (1.1). Semi blockable; the
+		-- thrusts slow down after a whiff or when blocked by an unmarked target (a marked one keeps them fast).
 		[ 1 ] = K.Melee{ "Despair", cooldown = 16, startup = 0.3, hits = 6, interval = 0.14, hitDamage = { 3, 3, 3, 3, 3, 1.1 },
 			hitBlock = { "normal", "normal", "normal", "normal", "normal", "none" }, reach = 10, width = 5, type = "melee", bypassRagdoll = true,
-			ragdoll = { h = 60, v = 18 } },
+			ragdoll = { h = 60, v = 18 },
+			onUse = function( ply ) ply.jjs_despairKeep = nil end,
+			onContact = function( ply, v, p, r ) if r == "blocked" and Marked( v, ply ) then ply.jjs_despairKeep = true end end },
 		-- Turns the staff backward to pierce whoever is behind (3), stares them down with i-frames, then spins them to the
 		-- front and kicks them away with a long stun (4); the front dash comes off cooldown. Hit by melee during the
 		-- windup, it counters: the thrust speeds up and loses its endlag on a miss.
@@ -122,6 +129,18 @@ K.Character( "aspiringmangaka", {
 			MARK.Use( ply, mv, 0 )
 		end,
 	},
+
+	-- Despair: right after the first thrust, a whiff or an unmarked block slows the rest down
+	Think = function( ply )
+		local act = JJS.GetAction( ply )
+		local ab = JJS.GetChar( ply ).abilities[ 1 ]
+		if not act or act.kitParams ~= ab.move.p or ply.jjs_despairAt == ply:GetJActStart() then return end
+		if JJS.ActionTime( ply ) < act.kitParams.startup + 0.02 then return end
+		ply.jjs_despairAt = ply:GetJActStart()
+		if ply.jjs_kitLanded or ply.jjs_despairKeep then return end
+		JJS.StopAction( ply, true )
+		DESPAIR_SLOW.Use( ply, nil, 0 )
+	end,
 
 	-- Foresight: holds the spear defensively for 1s. A melee attacker is blocked and smacked up and away with the handle
 	-- (40; only them). A Clairvoyance-marked attacker, or one at 40 HP or less: a cutscene, the user pushes the staff

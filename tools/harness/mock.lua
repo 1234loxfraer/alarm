@@ -252,10 +252,11 @@ function FindMetaTable( n ) return META[ n ] end
 local entities = {}
 local nextIndex = 1
 NULL = setmetatable( { __null = true }, { __index = function() return function() return nil end end } )
+-- like GMod's: only objects with an IsValid method that says so
 function IsValid( e )
-	if e == nil or e == NULL then return false end
+	if not e or e == NULL then return false end
 	if type( e ) == "table" and e.IsValid then return e:IsValid() end
-	return e ~= nil
+	return false
 end
 
 local function NewEntity( class, mt )
