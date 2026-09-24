@@ -73,7 +73,7 @@ function M.FindTargets( ply, cfg, variant )
 		off = vo.reach * S * 0.45
 	end
 	local center = U.BodyCenter( ply ) + U.YawForward( yaw ) * off
-	local rag = variant == M.DOWN
+	local rag = variant == M.DOWN or cfg.BypassRagdoll
 	if vo and vo.bypassRagdoll ~= nil then rag = vo.bypassRagdoll end
 	return U.PlayersInBox( center, yaw, size, { ignore = ply, ragdolled = rag } )
 end
@@ -106,6 +106,12 @@ function M.BuildHit( ply, victim, cfg, idx, variant )
 		m1Index = idx,
 		m1Variant = variant,
 	}
+
+	-- string-wide settings: Unblockable, BypassRagdoll, HitRagdoll = { [idx] = { h, v, time } } (non-final hits)
+	if cfg.Unblockable then hit.block = "none" end
+	if cfg.BypassRagdoll then hit.bypassRagdoll = true end
+	local hr = not final and cfg.HitRagdoll and cfg.HitRagdoll[ idx ]
+	if hr then hit.ragdoll = { time = hr.time or 0.8, vel = fwd * ( hr.h or 30 ) * S + Vector( 0, 0, ( hr.v or 15 ) * S ) } end
 
 	if final then
 		local f = cfg.Final[ variant ]

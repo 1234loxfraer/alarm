@@ -5,7 +5,6 @@
 -- startup of an M1/move. While ragdolled with a full evasive bar it becomes the ragdoll cancel;
 -- with an anti-team burst available it triggers the burst.
 
-local S = JJS.STUD
 local U = JJS.Util
 
 JJS.Dash = JJS.Dash or {}
