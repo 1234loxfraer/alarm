@@ -10,6 +10,8 @@
 --   "none"    no sure-hit (placeholder for domains with their own rules)
 -- Domains cast within ClashWindow of each other clash: sure-hits stop and each caster fills a
 -- bar by landing hits on the other casters; the winner keeps their domain, the rest break.
+-- Invasion (Chimera Shadow Garden, Black Death's roaches): while a domain is invaded its barrier is open (anyone
+-- can enter or leave) and its sure-hit is off; D.Invade( d, ply ) / D.EndInvasion( d ).
 
 local U = JJS.Util
 local K = JJS.Kit
@@ -33,6 +35,7 @@ function ENT:SetupDataTables()
 	self:NetworkVar( "Int", 0, "ColorId" )
 	self:NetworkVar( "String", 0, "DomainName" )
 	self:NetworkVar( "Entity", 0, "Caster" )
+	self:NetworkVar( "Entity", 1, "Invader" )
 end
 
 function ENT:Initialize()
@@ -103,6 +106,20 @@ function D.CanCast( ply )
 	return true
 end
 
+-- Invaded: the barrier is open and the sure-hit is off
+function D.Invaded( d ) return IsValid( d:GetInvader() ) end
+
+-- A domain (not the player's own, not already invaded) whose border is within `margin` units of the player
+function D.BorderNear( ply, margin )
+	local pos = ply:GetPos()
+	for _, d in ipairs( D.All() ) do
+		if d:GetCaster() ~= ply and d:GetRadius() > 0 and not D.Invaded( d )
+			and math.abs( pos:Distance( d:GetPos() ) - d:GetRadius() ) <= margin then
+			return d
+		end
+	end
+end
+
 -- Domains cast within the clash window don't block each other (they clash instead)
 function D.JustCast( d )
 	return CurTime() - d:GetBorn() <= cfg.ClashWindow
@@ -115,7 +132,7 @@ function D.Barrier( ply, mv )
 	local pos = mv:GetOrigin()
 	for _, d in ipairs( D.All() ) do
 		local c, r = d:GetPos(), d:GetRadius()
-		if r <= 0 or d:InClash() then continue end
+		if r <= 0 or d:InClash() or D.Invaded( d ) then continue end
 		local off = pos - c
 		local dist = off:Length()
 		if d == mine then
@@ -155,6 +172,28 @@ if SERVER then
 		d.jjs_clash = nil
 		hook.Run( "JJS_DomainEnd", d )
 		d:Remove()
+	end
+
+	function D.Invade( d, ply )
+		if not IsValid( d ) then return end
+		d:SetInvader( ply )
+		hook.Run( "JJS_DomainInvaded", d, ply )
+	end
+
+	-- closing the hole: whoever is inside is caught again, whoever left is free
+	function D.EndInvasion( d )
+		if not IsValid( d ) or not D.Invaded( d ) then return end
+		d:SetInvader( NULL )
+		local c, r = d:GetPos(), d:GetRadius()
+		for _, v in ipairs( player.GetAll() ) do
+			local inside = v:Alive() and v:GetPos():Distance( c ) <= r
+			if inside and not IsValid( D.Of( v ) ) then
+				v:SetNW2Entity( "JJSDomain", d )
+			elseif not inside and D.Of( v ) == d and v ~= d:GetCaster() then
+				v:SetNW2Entity( "JJSDomain", NULL )
+				v.jjs_domainMeter = nil
+			end
+		end
 	end
 
 	-- p: kit params of the Domain move
@@ -318,6 +357,9 @@ if SERVER then
 				end
 				continue
 			end
+
+			-- invaded: no sure-hit while the hole stays open
+			if D.Invaded( d ) then continue end
 
 			local p = d.jjs or {}
 			local fn = SURE[ p.sureHit or "damage" ] or SURE.none

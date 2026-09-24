@@ -44,7 +44,8 @@
 --     `specialCooldown` = cooldown put on the special), combo = { [slot] = overrides } (another move's key
 --     pressed during the startup: both moves go on cooldown unless `free`), miss (spec started when
 --     nothing was hit),
---   air = { overrides } (used while airborne), hold = { time, overrides } (HOLD variant) or a list of such stages,
+--   air = { overrides } (used while airborne), hold = { time, overrides } (HOLD variant) or a list of such stages
+--   (holdMoveMult: speed while holding),
 --   again = spec with a `window` (USE AGAIN / USE TWICE follow-up), onUse(ply, p) when the move starts
 --
 -- Kinds and their own fields:
@@ -1362,7 +1363,7 @@ function Build( id, key, spec )
 		local need = hold.time
 		JJS.RegisterAction( name .. ".charge", {
 			dur = need + 1.5,
-			moveMult = 0.4,
+			moveMult = p.holdMoveMult or 0.4,
 			gesture = "gesture_bow",
 			counter = Parry( p ), -- a parry window starts with the charge
 			think = function( ply, t, mv, slot )
