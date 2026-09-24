@@ -47,6 +47,18 @@ end
 function JJS.IsImpaired( ply ) return ply:GetNW2Float( "JJSImpaired", 0 ) > CurTime() end
 function JJS.Impair( ply, seconds ) ply:SetNW2Float( "JJSImpaired", math.max( ply:GetNW2Float( "JJSImpaired", 0 ), CurTime() + seconds ) ) end
 
+-- Confiscated abilities (Deadly Sentencing): locked slots, whichever moveset is in use
+function JJS.IsConfiscated( ply, slot )
+	return slot <= 4 and ply:GetNW2Float( "JJSConfiscatedEnd", 0 ) > CurTime()
+		and bit.band( ply:GetNW2Int( "JJSConfiscated", 0 ), bit.lshift( 1, slot ) ) ~= 0
+end
+function JJS.Confiscate( ply, slots, seconds )
+	local mask = 0
+	for _, s in ipairs( slots ) do mask = bit.bor( mask, bit.lshift( 1, s ) ) end
+	ply:SetNW2Int( "JJSConfiscated", mask )
+	ply:SetNW2Float( "JJSConfiscatedEnd", CurTime() + seconds )
+end
+
 -- Blinded: the screen goes dark (client overlay)
 function JJS.Blind( ply, seconds ) ply:SetNW2Float( "JJSBlind", math.max( ply:GetNW2Float( "JJSBlind", 0 ), CurTime() + seconds ) ) end
 

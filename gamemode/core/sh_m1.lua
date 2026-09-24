@@ -83,12 +83,7 @@ function M.FindTargets( ply, cfg, variant )
 	-- NoAirRagdoll: ragdolls off the ground can't be hit (Crow Charmer's battle axe; for a moment after Veilstep)
 	if cfg.NoAirRagdoll or ( ply.jjs_noAirRag or 0 ) > CurTime() then
 		for i = #list, 1, -1 do
-			local r = list[ i ]:GetJRagdolled() and list[ i ]:GetJRagEnt() or nil
-			if IsValid( r ) then
-				local p = r:GetPos()
-				local tr = util.TraceLine( { start = p, endpos = p - Vector( 0, 0, 3 * S + 12 ), mask = MASK_SOLID_BRUSHONLY } )
-				if not tr.Hit then table.remove( list, i ) end
-			end
+			if U.RagdollAirborne( list[ i ] ) then table.remove( list, i ) end
 		end
 	end
 	return list

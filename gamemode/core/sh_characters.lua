@@ -92,7 +92,9 @@ function JJS.GetAbility( ply, slot )
 end
 
 function JJS.TryAbility( ply, mv, slot )
-	if JJS.IsImpaired( ply ) then return end
+	-- something else takes the key (a trial's choices, a quick-time event...)
+	if hook.Run( "JJS_AbilityPress", ply, slot, mv ) then return end
+	if JJS.IsImpaired( ply ) or JJS.IsConfiscated( ply, slot ) then return end
 	if slot == 5 and JJS.Kit.TrySpecialVariant( ply, mv ) then return end
 	if slot ~= 5 and JJS.Kit.TryCombo( ply, mv, slot ) then return end
 	local ab = JJS.GetAbility( ply, slot )

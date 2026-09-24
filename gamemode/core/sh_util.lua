@@ -18,6 +18,15 @@ function U.YawRight( yaw )
 	return Vector( math.sin( r ), -math.cos( r ), 0 )
 end
 
+-- A ragdolled player whose ragdoll is off the ground
+function U.RagdollAirborne( ply )
+	local r = ply:GetJRagdolled() and ply:GetJRagEnt() or nil
+	if not IsValid( r ) then return false end
+	local p = r:GetPos()
+	local tr = util.TraceLine( { start = p, endpos = p - Vector( 0, 0, 3 * S + 12 ), mask = MASK_SOLID_BRUSHONLY } )
+	return not tr.Hit
+end
+
 function U.Flat( v )
 	local f = Vector( v.x, v.y, 0 )
 	f:Normalize()

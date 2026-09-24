@@ -144,7 +144,10 @@ local function DrawKit( ply, now )
 
 	for slot = 1, 4 do
 		local ab = JJS.GetAbility( ply, slot )
-		DrawMove( x0 + ( slot - 1 ) * ( bw + gap ), y0, bw, bh, ab, KeyName( B[ "a" .. slot ] ), JJS.GetCooldown( ply, slot ), now, TipOf( ab, ply, slot ) )
+		local cd = JJS.GetCooldown( ply, slot )
+		-- confiscated: shown as a cooldown until it's given back
+		if JJS.IsConfiscated( ply, slot ) then cd = math.max( cd, ply:GetNW2Float( "JJSConfiscatedEnd", 0 ) ) end
+		DrawMove( x0 + ( slot - 1 ) * ( bw + gap ), y0, bw, bh, ab, KeyName( B[ "a" .. slot ] ), cd, now, TipOf( ab, ply, slot ) )
 	end
 
 	-- alternate moveset (Rika, Ten Shadows' switch..)
