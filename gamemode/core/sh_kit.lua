@@ -65,6 +65,7 @@
 --   Counter    window, counters = { melee = "counter", bullet = "evade", ... }, riposte (damage), teleport,
 --              onCounter(ply, attacker, hit, mode); miss = spec used when the window passed with nothing countered
 --   Target     range (studs to the aimed target), then hits it like Melee after appearing next to it
+--              (pickTarget(ply, p) -> target: chosen another way; origin(ply) -> position the hits come from)
 --              (noHit = true: only teleports; teleport = false: hits the target from where the user stands;
 --              pullIn = true: the first hit drags the target in front of the user)
 --   specialAfter = spec with a `window`: pressing the special right after the move (Face Grater...); `anyway` =
@@ -230,6 +231,8 @@ function K.Fwd( ply ) return U.YawForward( ply:EyeAngles().y ) end
 
 -- Builds the hit table for hit number `idx` of a move
 function K.MakeHit( ply, p, victim, idx, from )
+	-- origin(ply): the hits come from somewhere else than the user (Rika)
+	if not from and p.origin then from = p.origin( ply ) end
 	idx = idx or p.hits
 	local last = idx >= p.hits
 	local hit = {
@@ -266,6 +269,7 @@ end
 
 -- Applies a hit and handles blocked endlag; returns the JJS.Hit result
 function K.Apply( ply, p, victim, idx, from, scale )
+	if not from and p.origin then from = p.origin( ply ) end
 	local hit = K.MakeHit( ply, p, victim, idx, from )
 	if scale then hit.damage = hit.damage * scale end
 	-- stunRag = { h, v }: a target that is already stunned is ragdolled instead (Granite Blast)
@@ -375,6 +379,12 @@ function K.AimTarget( ply, range, cone )
 		end
 	end
 	return best
+end
+
+-- The target of a Target move: pickTarget(ply, p) (Rika's own targeting) or the one under the cursor
+function K.PickTarget( ply, p )
+	if p.pickTarget then return p.pickTarget( ply, p ) end
+	return K.AimTarget( ply, p.range, p.cone )
 end
 
 -- Aim direction for rays/projectiles (pitch limited so ground shots stay useful)
@@ -746,7 +756,7 @@ IMPL.target = function( p )
 		local v = ply:GetJActTarget()
 		if not IsValid( v ) or not v:Alive() then return end
 		local reach = p.teleport == false and p.range + 60 or p.reach + 40
-		if v:GetPos():DistToSqr( ply:GetPos() ) > reach ^ 2 then return end
+		if v:GetPos():DistToSqr( p.origin and p.origin( ply ) or ply:GetPos() ) > reach ^ 2 then return end
 		-- pullIn: the first hit drags the target in front of the user (before it lands, so a ragdoll starts there)
 		local from
 		if i == 1 and p.pullIn and not v:GetJRagdolled() and not JJS.HasIFrames( v ) then
@@ -1097,7 +1107,7 @@ local function Start( ply, mv, slot, ab, move, skipCooldown )
 	end
 	local target
 	if move.p.kind == "target" or move.p.target then
-		target = K.AimTarget( ply, move.p.range, move.p.cone )
+		target = K.PickTarget( ply, move.p )
 		if not IsValid( target ) then return end
 		if move.p.kind == "target" and move.p.teleport ~= false then
 			local dir = U.Flat( target:GetPos() - ( mv and mv:GetOrigin() or ply:GetPos() ) )
@@ -1139,7 +1149,7 @@ function K.PickVariant( ply, mv, p, V, air, move )
 	end
 	if V.back and mv and mv:GetForwardSpeed() < 0 then return V.back end
 	if V.airTarget or V.ragdolled then
-		local t = p.kind == "target" and K.AimTarget( ply, p.range, p.cone ) or K.FrontTarget( ply, p )
+		local t = p.kind == "target" and K.PickTarget( ply, p ) or K.FrontTarget( ply, p )
 		if IsValid( t ) then
 			if V.ragdolled and t:GetJRagdolled() then return V.ragdolled end
 			if V.airTarget and not t:IsOnGround() and not t:GetJRagdolled() then return V.airTarget end
@@ -1386,7 +1396,7 @@ function Build( id, key, spec )
 
 	ab.CanUse = function( ply, slot, mv )
 		if not DefaultCanUse( ply ) then return false end
-		if ( p.kind == "target" or p.target ) and not IsValid( K.AimTarget( ply, p.range, p.cone ) ) then return false end
+		if ( p.kind == "target" or p.target ) and not IsValid( K.PickTarget( ply, p ) ) then return false end
 		if p.kind == "domain" and not JJS.Domain.CanCast( ply ) then return false end
 		if spec.CanUse and not spec.CanUse( ply, slot ) then return false end
 		return true

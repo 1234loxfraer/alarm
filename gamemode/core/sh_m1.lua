@@ -80,8 +80,8 @@ function M.FindTargets( ply, cfg, variant )
 	local rag = variant == M.DOWN or cfg.BypassRagdoll
 	if vo and vo.bypassRagdoll ~= nil then rag = vo.bypassRagdoll end
 	local list = U.PlayersInBox( center, yaw, size, { ignore = ply, ragdolled = rag } )
-	-- NoAirRagdoll: ragdolls off the ground can't be hit (Crow Charmer's battle axe)
-	if cfg.NoAirRagdoll then
+	-- NoAirRagdoll: ragdolls off the ground can't be hit (Crow Charmer's battle axe; for a moment after Veilstep)
+	if cfg.NoAirRagdoll or ( ply.jjs_noAirRag or 0 ) > CurTime() then
 		for i = #list, 1, -1 do
 			local r = list[ i ]:GetJRagdolled() and list[ i ]:GetJRagEnt() or nil
 			if IsValid( r ) then
