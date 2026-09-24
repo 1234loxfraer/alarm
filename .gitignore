@@ -1,2 +1,4 @@
 content/
 *.rar
+tools/wiki/raw/
+tools/wiki/chars.json

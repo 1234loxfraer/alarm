@@ -36,6 +36,8 @@ end
 function ENT:Initialize()
 	self:DrawShadow( false )
 	if SERVER then
+		-- the engine skips entities without a model; the dome is drawn in DrawTranslucent
+		self:SetModel( "models/hunter/blocks/cube025x025x025.mdl" )
 		self:SetMoveType( MOVETYPE_NONE )
 		self:SetSolid( SOLID_NONE )
 		self:SetNotSolid( true )
@@ -47,11 +49,19 @@ function ENT:InClash() return self:GetClashEnd() > CurTime() end
 if CLIENT then
 	function ENT:Draw() end
 
+	-- keep the render bounds as big as the dome so it isn't culled
+	function ENT:Think()
+		local r = math.max( self:GetRadius(), 1 )
+		if self.jjs_bounds ~= r then
+			self.jjs_bounds = r
+			self:SetRenderBounds( Vector( -r, -r, -r ), Vector( r, r, r ) )
+		end
+	end
+
 	function ENT:DrawTranslucent()
 		local r = self:GetRadius()
 		if r <= 0 then return end
 		local pos = self:GetPos()
-		self:SetRenderBoundsWS( pos - Vector( r, r, r ), pos + Vector( r, r, r ) )
 
 		local grow = math.Clamp( ( CurTime() - self:GetBorn() ) / 0.4, 0, 1 )
 		local rr = r * U.Ease.OutCubic( grow )

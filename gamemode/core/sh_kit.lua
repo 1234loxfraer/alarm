@@ -695,7 +695,8 @@ end
 function Build( id, key, spec )
 	if not istable( spec ) or not spec.kind then return spec end
 	local name = id .. "." .. key
-	local ab = { name = spec.name or spec[ 1 ] or "?", tip = spec.tip, cooldown = spec.cooldown or 10, spec = spec }
+	local name1 = spec.name or spec[ 1 ]
+	local ab = { name = isstring( name1 ) and name1 or "?", tip = spec.tip, cooldown = spec.cooldown or 10, spec = spec }
 
 	if spec.kind == "toggle" then
 		ab.cooldown = spec.cooldown or 1
@@ -741,10 +742,14 @@ function Build( id, key, spec )
 	end
 
 	if spec.kind == "bymode" then
-		local built = {}
+		local built, names = {}, {}
 		for i, sub in ipairs( spec ) do
-			if istable( sub ) then built[ i - 1 ] = Build( id, key .. ".m" .. i, sub ) end
+			if istable( sub ) then
+				built[ i - 1 ] = Build( id, key .. ".m" .. i, sub )
+				names[ #names + 1 ] = built[ i - 1 ].name
+			end
 		end
+		ab.name = table.concat( names, " / " )
 		ab.Pick = function( ply ) return built[ ply:GetJMode() ] or built[ 0 ] end
 		return ab
 	end

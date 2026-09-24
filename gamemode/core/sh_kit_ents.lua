@@ -19,6 +19,8 @@ end
 function ENT:Initialize()
 	self:DrawShadow( false )
 	if SERVER then
+		-- the engine skips entities without a model; this one is never drawn (see DrawTranslucent)
+		self:SetModel( "models/hunter/blocks/cube025x025x025.mdl" )
 		self:SetMoveType( MOVETYPE_NONE )
 		self:SetSolid( SOLID_NONE )
 		self:SetNotSolid( true )
@@ -107,6 +109,7 @@ if CLIENT then
 
 	function ENT:Initialize()
 		self:DrawShadow( false )
+		self:SetRenderBounds( Vector( -300, -300, -300 ), Vector( 300, 300, 300 ) )
 		self.Trail = {}
 	end
 
@@ -116,8 +119,6 @@ if CLIENT then
 		local col = K.COLOR_BY_ID[ self:GetColorId() ] or color_white
 		local r = math.max( self:GetRadius(), 12 )
 		local pos = self:GetPos()
-		self:SetRenderBoundsWS( pos - Vector( 300, 300, 300 ), pos + Vector( 300, 300, 300 ) )
-
 		local trail = self.Trail
 		if not trail[ 1 ] or trail[ 1 ]:DistToSqr( pos ) > 16 then table.insert( trail, 1, pos ) end
 		if #trail > 10 then trail[ #trail ] = nil end

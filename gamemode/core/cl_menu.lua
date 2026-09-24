@@ -17,9 +17,7 @@ local function MoveLines( set, lines, header )
 	for slot = 1, 4 do
 		local ab = set.abilities and set.abilities[ slot ]
 		if ab then
-			local name = ab.name
-			if ab.Pick and not ab.Use then name = "(mode dependent)" end
-			lines[ #lines + 1 ] = { string.format( "  %d  %s", slot, name or "?" ) }
+			lines[ #lines + 1 ] = { string.format( "  %d  %s", slot, ab.name or "?" ) }
 		end
 	end
 	if set.special then lines[ #lines + 1 ] = { "  R  " .. ( set.special.name or "?" ) } end

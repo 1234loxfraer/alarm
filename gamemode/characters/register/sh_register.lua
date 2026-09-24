@@ -104,7 +104,7 @@ local function Discarding( ply ) return ply:GetNW2Bool( "JJSDiscard" ) end
 
 -- Each slot shows whatever skill the rotation put there
 local function Slot( slot )
-	local proxy = { name = "Receipt" }
+	local proxy = { name = "Receipt (rotating skill)" }
 	proxy.Pick = function( ply )
 		local slots = Read( ply )
 		local inner = BUILT[ slots[ slot ] ]
