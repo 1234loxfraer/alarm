@@ -24,6 +24,7 @@ function M.Unpack( var )
 end
 
 function M.Variant( ply, mv )
+	if M.Cfg( ply ).NoLaunch then return M.NEUTRAL end
 	local vz = mv:GetVelocity().z
 	local ground = ply:IsOnGround()
 	if not ground and vz < -3 * S then return M.DOWN end
@@ -97,6 +98,13 @@ function M.BuildHit( ply, victim, cfg, idx, variant )
 			if victim:IsOnGround() or victim:GetJRagdolled() then vel = fwd * f.h * 0.3 + Vector( 0, 0, -10 * S ) end
 		end
 		hit.ragdoll = { time = f.ragdoll, vel = vel }
+		-- FinalStun: the last hit knocks back with (evadable) stun instead, and reaches grounded ragdolls
+		if cfg.FinalStun then
+			hit.ragdoll = nil
+			hit.stun = cfg.FinalStun
+			hit.knock = fwd * f.h * 0.6
+			hit.bypassRagdoll = true
+		end
 		hit.fxScale = 1.4
 
 		-- 20% evasive for downslams on ragdolled targets / launches right at wakeup

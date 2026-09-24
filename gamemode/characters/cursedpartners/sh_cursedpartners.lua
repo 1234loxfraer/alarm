@@ -46,8 +46,12 @@ local function RikaMove( shared )
 		ab.Use = function( ply, mv, slot )
 			use( ply, mv, slot )
 			if shared then
+				-- every Rika move registers as going on cooldown (each strips a Bleed stack)
 				local cd = JJS.GetCooldown( ply, slot )
-				for i = 1, 3 do ply:SetNW2Float( "JJSAltCD" .. i, cd ) end
+				for i = 1, 3 do
+					ply:SetNW2Float( "JJSAltCD" .. i, cd )
+					if i ~= slot and cd - CurTime() > 1.5 then hook.Run( "JJS_Cooldown", ply, i, cd - CurTime() ) end
+				end
 			end
 			ply:SetJKitSet( 0 )
 		end

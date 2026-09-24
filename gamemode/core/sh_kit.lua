@@ -15,7 +15,9 @@
 --   heal, selfDamage, color (JJS.Kit.PALETTE key), crater (destruction scale on impact)
 --   onHit(ply, victim, p) when the final hit lands
 --   awakenCost (fraction of the awakening bar spent), noCooldown, charges (uses per cooldown)
---   slow = { mult, time } applied to targets hit, onEnd(ply, p) when the move finishes uninterrupted
+--   slow = { mult, time } applied to targets hit, onEnd(ply, p) when the move finishes uninterrupted,
+--   onFinish(ply, p, interrupted) whenever it ends; noKill (the hits leave the target at 1 HP at worst)
+--   backstep (studs travelled backward during the startup)
 --   hitDamage = { per hit }, hitBlock = { per hit block rule }, hitBypass = { per hit: hits ragdolls }
 --   A variant's own `cooldown` replaces the move's cooldown when that variant is used.
 --   interrupt = { damage (bonus), stun, ragdoll, onInterrupt(ply, victim, p) } when the hit interrupts the target's
@@ -28,7 +30,8 @@
 --              (onDone(ply, target, p) once they all played out)
 --   comboWindow: combos can be pressed until this time into the move (default: the startup), from comboFrom
 --   meleeIFrames (seconds from the start: melee hits pass through), knock (studs/s push on each hit),
---   knockBlock (the push also goes through block), chase (studs/s run at the target between hits)
+--   knockBlock (the push also goes through block), hitKnock = { per hit push }, chase (studs/s run at the target
+--   between hits)
 --   Variants (tables of overrides, each becomes its own action):
 --     air (user airborne), airTarget (target airborne), ragdolled (target ragdolled), back (walking
 --     backward: DIRECTION), highAir (airborne well above jump height), cond (cond.test(ply) is true),
@@ -120,7 +123,7 @@ local DEFAULTS = {
 	stub = { startup = 0.2, endlag = 0.2, type = "special", color = "white" },
 }
 
-local STUDS = { reach = true, width = true, height = true, range = true, radius = true, lunge = true,
+local STUDS = { reach = true, width = true, height = true, range = true, radius = true, lunge = true, backstep = true,
 	travel = true, speed = true, offset = true, explode = true, up = true, gravity = true }
 
 ------------------------------------------------------------------------------------------
@@ -232,10 +235,11 @@ function K.MakeHit( ply, p, victim, idx, from )
 		if away:LengthSqr() < 0.01 then away = K.Fwd( ply ) end
 		hit.ragdoll = { time = p.ragdoll.time, vel = away * p.ragdoll.h + Vector( 0, 0, p.ragdoll.v ), trueRag = p.trueRag }
 	end
-	if p.knock and not hit.ragdoll then
+	local kn = p.hitKnock and p.hitKnock[ idx ] or p.knock
+	if kn and kn > 0 and not hit.ragdoll then
 		local away = U.Flat( victim:GetPos() - ( from or ply:GetPos() ) )
 		if away:LengthSqr() < 0.01 then away = K.Fwd( ply ) end
-		hit.knock = away * p.knock * S + Vector( 0, 0, 40 )
+		hit.knock = away * kn * S + Vector( 0, 0, 40 )
 	end
 	if last and p.onHit then
 		hit.onHit = function( v ) p.onHit( ply, v, p ) end
@@ -429,12 +433,20 @@ local function Base( p )
 		end,
 		finish = function( ply, var, interrupted )
 			if SERVER and p.onEnd and not interrupted then p.onEnd( ply, p ) end
+			if SERVER and p.onFinish then p.onFinish( ply, p, interrupted ) end
 		end,
 	}
 end
 
 -- Moves forward during the startup, stopping once someone is within reach
 local function Lunge( p )
+	if p.backstep then
+		return function( ply, mv, t )
+			if t >= p.startup * 0.8 then return false end
+			K.Drive( ply, mv, -K.Fwd( ply ) * ( p.backstep / math.max( p.startup * 0.8, 0.05 ) ) )
+			return true
+		end
+	end
 	if not p.lunge then return end
 	return function( ply, mv, t )
 		if t >= p.startup then return false end
@@ -571,6 +583,7 @@ IMPL.rush = function( p )
 	def.finish = function( ply, var, interrupted )
 		ply.jjs_rush = nil
 		if SERVER and p.onEnd and not interrupted then p.onEnd( ply, p ) end
+		if SERVER and p.onFinish then p.onFinish( ply, p, interrupted ) end
 	end
 	return def
 end
@@ -764,6 +777,15 @@ IMPL.zone = function( p )
 end
 
 if SERVER then
+	-- noKill moves leave their target at 1 HP
+	hook.Add( "JJS_PreventDeath", "JJS_KitNoKill", function( victim, attacker, dmg, hit )
+		if hit and hit.kit and hit.kit.noKill then
+			victim:SetJHP( 1 )
+			victim:SetHealth( 1 )
+			return true
+		end
+	end )
+
 	hook.Add( "Tick", "JJS_KitZones", function()
 		local now = CurTime()
 		for i = #K.Zones, 1, -1 do

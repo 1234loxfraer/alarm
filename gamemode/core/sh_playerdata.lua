@@ -105,9 +105,11 @@ end
 function JJS.SetCooldown( ply, slot, seconds )
 	if ply:GetJKitSet() == 1 then
 		ply:SetNW2Float( "JJSAltCD" .. slot, CurTime() + seconds )
-		return
+	else
+		ply[ "SetJCD" .. slot ]( ply, CurTime() + seconds )
 	end
-	ply[ "SetJCD" .. slot ]( ply, CurTime() + seconds )
+	-- a move going on cooldown (Bleed stacks react to it)
+	if seconds > 1.5 then hook.Run( "JJS_Cooldown", ply, slot, seconds ) end
 end
 
 function JJS.ClearCooldowns( ply )

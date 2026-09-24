@@ -332,6 +332,8 @@ if SERVER then
 		Press( JJS.IN.AWAKEN )
 		Run( 5 )
 		report[ #report + 1 ] = string.format( "  awaken: awakened=%s hits=%d", tostring( A:GetJAwakened() ), ( hits[ A ] or 0 ) - beforeAwk )
+		-- conditional awakenings (Vengeance...): still exercise the awakened moves
+		if not A:GetJAwakened() and char.awakening and char.awakening.abilities then JJS.EnterAwakening( A ) end
 		if A:GetJAwakened() then
 			for slot = 1, 5 do
 				TrySlot( "awk", slot, { setup = function() end } )

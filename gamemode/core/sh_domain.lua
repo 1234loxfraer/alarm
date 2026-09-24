@@ -5,6 +5,7 @@
 --   "damage"  damage over time (dps), reduced to 25% while blocking
 --   "stun"    members can't act (Infinite Void)
 --   "drain"   a meter drains near the caster; when empty the target is destroyed
+--   "motion"  moving hurts: damage by the member's (and the caster's) speed, blocking cuts it (Time Cell Moon Palace)
 --   "none"    no sure-hit (placeholder for domains with their own rules)
 -- Domains cast within ClashWindow of each other clash: sure-hits stop and each caster fills a
 -- bar by landing hits on the other casters; the winner keeps their domain, the rest break.
@@ -248,6 +249,14 @@ if SERVER then
 		local dmg = ( p.dps or 2 ) * dt
 		if JJS.IsBlocking( v ) then dmg = dmg * ( p.blockMult or 0.25 ) end
 		JJS.ApplyDamage( v, d:GetCaster(), dmg, { type = JJS.DMG.DOMAIN } )
+	end
+
+	SURE.motion = function( d, p, v, dt )
+		local c = d:GetCaster()
+		local speed = v:GetVelocity():Length() + ( IsValid( c ) and c:GetVelocity():Length() * 0.5 or 0 )
+		local dmg = ( p.dps or 2 ) * dt * math.Clamp( speed / 250, 0, 3 )
+		if JJS.IsBlocking( v ) then dmg = dmg * ( p.blockMult or 0.25 ) end
+		if dmg > 0 then JJS.ApplyDamage( v, c, dmg, { type = JJS.DMG.DOMAIN } ) end
 	end
 
 	SURE.stun = function( d, p, v )
