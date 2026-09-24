@@ -318,8 +318,8 @@ if SERVER then
 		-- modes
 		for mode = 1, 2 do
 			for slot = 1, 5 do
-				local ab = JJS.GetAbility( A, slot )
-				if ab and ab.spec and ab.spec.kind == "bymode" then
+				local raw = JJS.Characters[ id ].abilities and JJS.Characters[ id ].abilities[ slot ]
+				if raw and raw.spec and raw.spec.kind == "bymode" then
 					TrySlot( "mode" .. mode, slot, { setup = function() A:SetJMode( mode ) end } )
 				end
 			end
