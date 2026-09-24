@@ -1,0 +1,28 @@
+"jjs"
+{
+	"base"		"base"
+	"title"		"Jujutsu Shenanigans"
+	"maps"		"^jjs_"
+	"menusystem"	"1"
+	"workshopid"	""
+
+	"settings"
+	{
+		1
+		{
+			"name"		"jjs_respawn_time"
+			"text"		"Respawn time (s)"
+			"help"		"Seconds a dead player stays ragdolled before respawning"
+			"type"		"Numeric"
+			"default"	"4"
+		}
+		2
+		{
+			"name"		"jjs_player_collide"
+			"text"		"Players collide with each other"
+			"help"		"0 = players pass through each other"
+			"type"		"CheckBox"
+			"default"	"0"
+		}
+	}
+}
