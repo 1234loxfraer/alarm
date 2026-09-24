@@ -1,10 +1,12 @@
 -- True Cannon (Ryu Ishigori).
--- Core stage: Cursed Energy Discharge (3-hit M1 string, final neutral hit fires a 24 stud
--- ray for 8 damage while Overheat < 90%) and the Overheat meter. The moves are registered
--- with their JJS names/cooldowns; their logic comes in the next stage.
+-- Cursed Energy Discharge: a 3-hit M1 string whose final neutral hit fires a 24 stud ray for
+-- 8 damage while Overheat < 90%. Overheat (Res1, 0..1) grows with the cannon moves: Granite Blast
+-- and Every Last Drop. are disabled at 100%, Restyle cools down. The other moves are JJS.Kit
+-- placeholders built from the wiki numbers; comments describe what the real move does.
 
 local S = JJS.STUD
 local U = JJS.Util
+local K = JJS.Kit
 
 -- The patched copy includes the JJS animation library; the workshop original is the fallback
 local MODEL = "models/jjs/ryu.mdl"
@@ -12,11 +14,27 @@ if not util.IsValidModel( MODEL ) and not file.Exists( MODEL, "GAME" ) then
 	MODEL = "models/reiko/jujutsu/characters/ryu.mdl"
 end
 
+local function Overheat( ply ) return ply:GetJRes1() end
+local function AddOverheat( ply, amount )
+	-- Decadence: awakened, the meter is locked at 100%
+	if ply:GetJAwakened() then ply:SetJRes1( 1 ) return end
+	ply:SetJRes1( math.Clamp( ply:GetJRes1() + amount, 0, 1 ) )
+end
+local function Heat( amount ) return function( ply ) AddOverheat( ply, amount ) end end
+local function NotOverheated( ply ) return Overheat( ply ) < 1 end
+
 local TC = {
 	name = "True Cannon",
+	category = "complete",
+	hp = 100,
 	model = MODEL,
 	color = Color( 120, 220, 255 ),
 	idle = "jjs_tc_idle",
+
+	passives = {
+		{ "Cursed Energy Discharge", "3 hit M1 string (3 + 3 + 4); the final neutral M1 fires a 24 stud ray (8) under 90% Overheat." },
+		{ "Overheat", "Cannon moves heat up the meter; at 100% they're disabled and the head smokes." },
+	},
 
 	m1 = {
 		Count = 3,
@@ -37,35 +55,78 @@ local TC = {
 	},
 
 	abilities = {
-		[ 1 ] = { name = "Granite Blast", tip = "HOLD", cooldown = 0.5 },
-		[ 2 ] = { name = "Unsatisfied", cooldown = 20 },
-		[ 3 ] = { name = "Second Helping", tip = "TARGET", cooldown = 15 },
-		[ 4 ] = { name = "Appetizer", cooldown = 18 },
+		-- A long beam from the pompadour: 78.5 studs, stuns the first person met (ragdolls if already stunned). 20% Overheat.
+		-- Hold ~1.1s: pierces everything over 100 studs, unblockable, ragdolls back; damage falls off 12 -> 5.5. 40% Overheat.
+		-- TODO dash variant: during a front dash, a looping beam and a second front dash.
+		[ 1 ] = K.Beam{ "Granite Blast", cooldown = 0.5, startup = 0.35, damage = 5.5, range = 78.5, radius = 2.5, type = "bullet",
+			bypassRagdoll = true, stun = 0.9, color = "cyan", CanUse = NotOverheated, onUse = Heat( 0.2 ),
+			hold = { time = 1.1, damage = 12, range = 100, pierce = true, block = "none", type = "explosion", trueRag = true,
+				ragdoll = { h = 55, v = 15, time = 0.4 }, onUse = Heat( 0.4 ) } },
+		-- Three quick blows (3 each), then a Tetsuzanko back clash (3) and a toss (6).
+		[ 2 ] = K.Melee{ "Unsatisfied", cooldown = 20, startup = 0.3, damage = 18, hits = 5, interval = 0.22, type = "melee",
+			ragdoll = { h = 60, v = 20 } },
+		-- Aiming within 70 studs, dashes above a new opponent with melee i-frames and slams them, bouncing them skywards.
+		-- TODO air target variant: a punch with delayed impact sending them to the floor (6 + 6), no ragdoll cancel.
+		[ 3 ] = K.Target{ "Second Helping", cooldown = 15, range = 70, startup = 0.35, damage = 12, type = "melee", block = "none",
+			bypassRagdoll = true, armor = "melee", ragdoll = { h = 5, v = 60 } },
+		-- Two quick Granite Blasts (4 each, 80 studs) then a vertical ray ragdolling targets 60 studs ahead toward the user (8).
+		-- 10% Overheat per blast; overheated, it skips to the final ray which ragdolls away instead.
+		[ 4 ] = K.Beam{ "Appetizer", cooldown = 18, startup = 0.35, damage = 16, hits = 3, interval = 0.4, range = 80, radius = 2.5,
+			type = "bullet", bypassRagdoll = true, color = "cyan", ragdoll = { h = -35, v = 25 }, onUse = Heat( 0.3 ) },
 	},
-	special = { name = "Restyle", cooldown = 17 },
+	-- "Sweet!": poses to cool down (-60% Overheat); at 100% combs the hair instead (2.75s, -100%).
+	special = K.Buff{ "Restyle", cooldown = 17, startup = 0.3, duration = 0.7, color = "cyan",
+		onUse = function( ply ) ply:SetJRes1( ply:GetJRes1() >= 1 and 0 or math.max( 0, ply:GetJRes1() - 0.6 ) ) end },
 
 	awakening = {
 		name = "Every Last Drop.",
 		duration = 90,
+		-- Decadence: no passive regen, Overheat locked at 100%.
+		-- TODO: at critical health the awakening bar absorbs damage (200); moves can be feinted into each other for 5 HP.
 		abilities = {
-			[ 1 ] = { name = "\"What are you after?\"", cooldown = 18 },
-			[ 2 ] = { name = "\"I had no idea..\"", tip = "HIT", cooldown = 15 },
-			[ 3 ] = { name = "\"This is what dessert is like!\"", cooldown = 20 },
-			[ 4 ] = { name = "\"You weren't invited.\"", tip = "HOLD", cooldown = 20 },
+			-- Slams the floor bouncing the target up (10), then an aimable air lunge; crashing into them trades punches (20) and launches (5).
+			[ 1 ] = K.Melee{ "\"What are you after?\"", cooldown = 18, startup = 0.35, damage = 35, hits = 3, interval = 0.4, lunge = 25,
+				type = "melee", block = "none", bypassRagdoll = true, selfDamage = 5, ragdoll = { h = 70, v = 25 } },
+			-- Winds back a punch; struck meanwhile (melee, bullet, swarm, most explosions) the user clashes back (20; 9 self damage).
+			[ 2 ] = K.Counter{ "\"I had no idea...\"", cooldown = 15, window = 0.8, armor = "bullet", riposte = 20, selfDamage = 9,
+				counters = { melee = "counter", bullet = "counter", swarm = "counter", explosion = "counter" }, tip = "HIT" },
+			-- Runs forward with a stunning kick (7) and a wild swing (3); landed, both exchange blows (20) until pushed apart (6).
+			[ 3 ] = K.Grab{ "\"This is what dessert is like!\"", cooldown = 20, startup = 0.35, damage = 36, hits = 6, interval = 0.3, lunge = 25,
+				type = "melee", blockDamage = 18, bypassRagdoll = true, armor = "total", selfDamage = 10, ragdoll = { h = 60, v = 20 } },
+			-- Winds up a right jab and lunges into the target, sending them flying. Held 1.9s it doubles (40).
+			-- TODO variant: against a wall, the debris flies 100 studs (20 per wall).
+			[ 4 ] = K.Melee{ "\"You weren't invited.\"", cooldown = 20, startup = 0.55, damage = 20, lunge = 18, type = "explosion", block = "none",
+				bypassRagdoll = true, trueRag = true, ragdoll = { h = 90, v = 20 }, crater = 1300,
+				hold = { time = 1.9, damage = 40, ragdoll = { h = 130, v = 30 } } },
 		},
-		special = { name = "Restyle", cooldown = 17 },
+		-- Wipes the face and cracks the knuckles: +10% health and +10% awakening time.
+		special = K.Buff{ "Restyle", cooldown = 17, startup = 0.3, duration = 1.7, heal = 10, color = "cyan",
+			onUse = function( ply ) JJS.AddAwakeningTime( ply, 0.1 ) end },
 	},
 }
 
--- Overheat lives in Res1 (0..1)
-function TC.GetOverheat( ply ) return ply:GetJRes1() end
+function TC.GetOverheat( ply ) return Overheat( ply ) end
+TC.AddOverheat = AddOverheat
 
-function TC.AddOverheat( ply, amount )
-	ply:SetJRes1( math.Clamp( ply:GetJRes1() + amount, 0, 1 ) )
+function TC.NoRegen( ply ) return ply:GetJAwakened() end
+
+-- Every Last Drop.: the awakening is an ultimate beam (104, beam clash rank 4). The awakening state
+-- follows only if the Overheat was at 80% or more (and below 100%) when it was fired.
+local LAST_DROP = K.Build( "truecannon", "ultbeam", K.Beam{ "Every Last Drop.", startup = 2, damage = 104, duration = 1.2, tick = 0.2,
+	range = 200, radius = 8, pierce = true, clash = 4, type = "explosion", block = "none", bypassRagdoll = true, uninterruptible = true,
+	iframes = 2, color = "cyan", crater = 2000, ragdoll = { h = 80, v = 25 },
+	onUse = function( ply ) ply.jjs_tcHeatAtCast = Overheat( ply ) end,
+	onEnd = function( ply )
+		local heat = ply.jjs_tcHeatAtCast or 0
+		ply:SetJRes1( 1 )
+		if heat >= 0.8 and heat < 1 then JJS.EnterAwakening( ply, nil, 25 ) end
+	end } )
+
+function TC.Awaken( ply, mv )
+	if Overheat( ply ) >= 1 or not LAST_DROP.CanUse( ply, 0, mv ) then return end
+	ply:SetJAwaken( 0 )
+	LAST_DROP.Use( ply, mv, 0 )
 end
-
--- The awakening (Every Last Drop.) comes with the move set
-function TC.Awaken( ply, mv ) end
 
 -- Cursed Energy Discharge: the final neutral M1 becomes a ray while not overheated
 function TC.OnM1Final( ply, variant, cfg, overheatedAtStart )
@@ -100,7 +161,7 @@ function TC.OnM1Final( ply, variant, cfg, overheatedAtStart )
 	return true
 end
 
-JJS.RegisterCharacter( "truecannon", TC )
+K.Character( "truecannon", TC )
 
 if SERVER then return end
 

@@ -11,10 +11,11 @@
 --   stun, ragdoll (true or { time, h, v } in studs/s; h < 0 pulls toward the user), trueRag (no evasive)
 --   bypassRagdoll, armor ("melee", "bullet", "total"), uninterruptible, iframes (during the move)
 --   heal, selfDamage, color (JJS.Kit.PALETTE key), crater (destruction scale on impact)
+--   onHit(ply, victim, p) when the final hit lands
 --   awakenCost (fraction of the awakening bar spent), noCooldown, charges (uses per cooldown)
 --   slow = { mult, time } applied to targets hit, onEnd(ply, p) when the move finishes uninterrupted
 --   air = { overrides } (used while airborne), hold = { time, overrides } (HOLD variant),
---   again = { window, spec } (USE AGAIN / USE TWICE follow-up), onUse(ply, p), onHit(ply, victim, p)
+--   again = spec with a `window` (USE AGAIN / USE TWICE follow-up), onUse(ply, p) when the move starts
 --
 -- Kinds and their own fields:
 --   Melee      reach, width, height, lunge (studs travelled during the startup)
@@ -29,6 +30,7 @@
 --              (noHit = true: only teleports; teleport = false: hits the target from where the user stands)
 --   Mobility   travel, time, dir ("forward", "back", "up", "aim"), hit (hit at the end)
 --   Buff       duration, speed, speedTime, evasive, awaken
+--   Zone       lingering area: radius, duration, tick, damage (per tick), follow (stays on the user), offset
 --   Domain     duration, sureHit ("damage", "stun", "drain"), dps, radius
 --   Toggle     switches to the alternate moveset (def.alt)
 --   Feint      cancels the startup of the move being performed and refunds its cooldown
@@ -79,6 +81,7 @@ local DEFAULTS = {
 	target = { startup = 0.25, endlag = 0.35, range = 40, reach = 9, width = 8, height = 8, type = "melee", color = "white" },
 	mobility = { startup = 0.05, endlag = 0.25, travel = 25, time = 0.4, dir = "forward", type = "melee", color = "white" },
 	buff = { startup = 0.2, duration = 0.6, endlag = 0, type = "special", color = "white" },
+	zone = { startup = 0.5, endlag = 0.3, radius = 20, duration = 5, tick = 0.5, offset = 0, type = "special", color = "red" },
 	domain = { duration = 14, sureHit = "damage", dps = 2, type = "domain", color = "purple" },
 	stub = { startup = 0.2, endlag = 0.2, type = "special", color = "white" },
 }
@@ -108,6 +111,7 @@ K.Counter = Kind( "counter" )
 K.Target = Kind( "target" )
 K.Mobility = Kind( "mobility" )
 K.Buff = Kind( "buff" )
+K.Zone = Kind( "zone" )
 K.Domain = Kind( "domain" )
 K.Stub = Kind( "stub" )
 K.Toggle = Kind( "toggle" )
@@ -187,7 +191,7 @@ function K.MakeHit( ply, p, victim, idx, from )
 		if away:LengthSqr() < 0.01 then away = K.Fwd( ply ) end
 		hit.ragdoll = { time = p.ragdoll.time, vel = away * p.ragdoll.h + Vector( 0, 0, p.ragdoll.v ), trueRag = p.trueRag }
 	end
-	if p.onHit then
+	if last and p.onHit then
 		hit.onHit = function( v ) p.onHit( ply, v, p ) end
 	end
 	return hit
@@ -460,6 +464,7 @@ end
 
 IMPL.mobility = function( p )
 	local def = Base( p )
+	local base = def.start
 	def.dur = p.startup + p.time + p.endlag
 	def.moveMult = p.moveMult or 0.2
 	def.move = function( ply, mv, t )
@@ -479,13 +484,23 @@ IMPL.mobility = function( p )
 		return true
 	end
 	if p.damage > 0 then
-		def.events = { { p.startup + p.time, function( ply )
-			if CLIENT then return end
-			for _, v in ipairs( K.BoxTargets( ply, p ) ) do K.Apply( ply, p, v ) end
-		end } }
+		-- crashes into everyone along the way (each target once)
 		p.reach = p.reach or 8 * S
 		p.width = p.width or 8 * S
 		p.height = p.height or 8 * S
+		def.start = function( ply )
+			base( ply )
+			ply.jjs_mobHit = {}
+		end
+		def.think = function( ply, t )
+			if CLIENT or t < p.startup or t > p.startup + p.time + 0.05 then return end
+			for _, v in ipairs( K.BoxTargets( ply, p ) ) do
+				if not ply.jjs_mobHit[ v ] then
+					ply.jjs_mobHit[ v ] = true
+					K.Apply( ply, p, v )
+				end
+			end
+		end
 	end
 	return def
 end
@@ -506,6 +521,39 @@ IMPL.buff = function( p )
 		K.Effect( "jjs_kit_cast", U.BodyCenter( ply ), nil, ply, 1, p )
 	end } }
 	return def
+end
+
+-- Lingering areas are ticked by the server; the user is free once the move ends
+K.Zones = K.Zones or {}
+
+IMPL.zone = function( p )
+	local def = Base( p )
+	def.events = { { p.startup, function( ply )
+		if CLIENT then return end
+		local center = ply:GetPos() + K.Fwd( ply ) * p.offset
+		K.Zones[ #K.Zones + 1 ] = { owner = ply, p = p, pos = center, stop = CurTime() + p.duration, nextTick = CurTime() }
+	end } }
+	return def
+end
+
+if SERVER then
+	hook.Add( "Tick", "JJS_KitZones", function()
+		local now = CurTime()
+		for i = #K.Zones, 1, -1 do
+			local z = K.Zones[ i ]
+			local ply = z.owner
+			if not IsValid( ply ) or not ply:Alive() or now >= z.stop or ( z.p.stopOnRagdoll ~= false and ply:GetJRagdolled() ) then
+				table.remove( K.Zones, i )
+			elseif now >= z.nextTick then
+				z.nextTick = now + z.p.tick
+				local center = z.p.follow and ply:GetPos() or z.pos
+				for _, v in ipairs( K.SphereTargets( center + Vector( 0, 0, 36 ), z.p.radius, ply, z.p.bypassRagdoll ) ) do
+					JJS.Hit( v, K.MakeHit( ply, z.p, v, 1, center ) )
+				end
+				K.Effect( "jjs_kit_burst", center + Vector( 0, 0, 4 ), Vector( 0, 0, 1 ), ply, z.p.radius, z.p )
+			end
+		end
+	end )
 end
 
 IMPL.stub = function( p )

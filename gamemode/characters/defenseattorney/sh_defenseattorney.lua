@@ -1,7 +1,15 @@
--- Defense Attorney. Generated from the JJS wiki; every move is a JJS.Kit placeholder.
--- Comments summarise what the real move does (see the wiki page for details).
+-- Defense Attorney (Hiromi Higuruma). Moves are JJS.Kit placeholders built from the wiki numbers;
+-- comments describe what the real move does.
+-- Awakening expands Deadly Sentencing, then grants the Executioner's Sword (Death Penalty).
+-- Execution stacks: a second stack on the same target executes them.
 
 local K = JJS.Kit
+
+-- Adds an Execution stack; the second one kills
+local function Execute( ply, victim )
+	victim.jjs_execution = ( victim.jjs_execution or 0 ) + 1
+	if victim.jjs_execution >= 2 then JJS.Kill( victim, ply, { type = JJS.DMG.SPECIAL } ) end
+end
 
 K.Character( "defenseattorney", {
 	name = "Defense Attorney",
@@ -11,50 +19,80 @@ K.Character( "defenseattorney", {
 	color = Color( 230, 210, 120 ),
 
 	passives = {
-		{ "Judge Gavel", "The user's cursed technique is tied to a gavel, with the second melee attack being split into two hits." },
+		{ "Judge Gavel", "The 2nd M1 hits twice (2 + (2 + 2) + 4 + 4); block breaks set the string to it. (TODO)" },
 	},
 
 	abilities = {
-		-- The user extends their gavel's handle, turning it into a sledgehammer then swinging it 3 times and finishing off with a devastating slam that will knock the target to...
-		-- TODO special variant: If the user was unarmed when using this move, they will instantly recall their tool and gain melee i-frames while performing a quick...
-		[ 1 ] = K.Melee{ "Extended Swings", cooldown = 15, damage = 15, hits = 2, type = "melee", ragdoll = true, tip = "SPECIAL" },
-		-- The user starts lifting their gavel up to make way a powerful ground slam, as it enlarges to a comedic size, crushing the target under its force and bouncing them...
-		-- TODO block break variant: If the target was blocking while the slam occurs, they will instead be crushed under the tool's weight and block broken on the floor for...
-		[ 2 ] = K.Melee{ "Justice Served", cooldown = 18, damage = 12, type = "melee", block = "none", bypassRagdoll = true },
-		-- The user holds their gavel forwards, before extending its handle to attack from a distance.
-		-- Follow-up: If the move was used twice during its windup, the user will follow up their gavel extension with a mostly uncounterable slam, grounding...
-		-- TODO special variant: If the user was unarmed before using this move, they will recall their tool and skip straight to the slam.
-		-- TODO special variant: By using the special during the move's windup, the user extends their gavel's handle backwards to eject themselves 35 studs forwards.
-		-- TODO air target variant "Grapple": If this move was used on an airborne enemy, the user will extend their gavel upwards like a hook to latch onto the target and make way...
-		[ 3 ] = K.Projectile{ "Judgement's Reach", cooldown = 13, damage = 7, type = "bullet", bypassRagdoll = true, color = "blue", tip = "USE TWICE", again = K.Summon{ "Judgement's Reach", damage = 6, type = "bullet", blockDamage = 3, bypassRagdoll = true, color = "blue" } },
-		-- The user kicks the target away regardless of block, and gets ready to rush into them right as they get unstunned with a swing of their gavel.
-		-- TODO variant: Using Extended Swings right after the kick will cancel the rush with a sweep of the gavel's handle.
-		-- TODO variant: Using Justice Served right after the kick will increase the gavel's size dramatically, allowing the user to follow up with a left swing...
-		-- TODO special variant: If the user was unarmed before using this move, then they will only perform the kick without a second rush.
-		[ 4 ] = K.Melee{ "Pressing Charges", cooldown = 16, damage = 4, hits = 2, type = "melee", bypassRagdoll = true, ragdoll = { h = 45, v = 18 }, tip = "SPECIAL" },
+		-- The gavel becomes a sledgehammer: 3 swings (2 each) and a slam knocking the target down (9).
+		-- TODO special variant: unarmed, a quick sweep with melee i-frames that pushes the target away.
+		[ 1 ] = K.Melee{ "Extended Swings", cooldown = 15, startup = 0.35, damage = 15, hits = 4, interval = 0.3, reach = 9, type = "melee",
+			ragdoll = { h = 10, v = -25 }, crater = 800 },
+		-- Lifts the gavel and slams it at a comedic size, bouncing the target high.
+		-- TODO block break variant (9): a blocking target is crushed and block broken for a few seconds.
+		[ 2 ] = K.Melee{ "Justice Served", cooldown = 18, startup = 0.75, damage = 12, reach = 9, width = 10, type = "melee", block = "none",
+			bypassRagdoll = true, crater = 1300, ragdoll = { h = 5, v = 60 } },
+		-- Extends the gavel's handle to hit from a distance with knockback and slight stun (pushes even through block).
+		-- Follow-up: pressed twice in the windup, a mostly uncounterable slam grounds the target (6).
+		-- TODO variants: unarmed (skips to the slam), special in the windup (ejects 35 studs forward), Grapple on airborne targets (11).
+		[ 3 ] = K.Melee{ "Judgement's Reach", cooldown = 13, startup = 0.4, damage = 7, reach = 22, width = 4, type = "bullet",
+			bypassRagdoll = true, stun = 0.6, tip = "USE TWICE",
+			again = K.Melee{ "Judgement's Reach: Slam", window = 0.6, startup = 0.3, damage = 6, reach = 22, width = 5, type = "swarm",
+				blockDamage = 3, bypassRagdoll = true, ragdoll = { h = 5, v = -30 } } },
+		-- Kicks the target away regardless of block (4), then rushes in with a gavel swing as they recover (3.5, +11 on 14.5 HP).
+		-- TODO variants: Extended Swings / Justice Served right after the kick; unarmed kick only.
+		[ 4 ] = K.Melee{ "Pressing Charges", cooldown = 16, startup = 0.3, damage = 7.5, hits = 2, interval = 0.8, reach = 9, type = "melee",
+			block = "none", bypassRagdoll = true, ragdoll = { h = 45, v = 15 } },
 	},
-	-- The user launches their gavel afar.
-	-- TODO special variant: If the gavel makes contact with a target (even if blocked), it will take thrice as long to return.
-	special = K.Projectile{ "No Escape", cooldown = 5, damage = 3, type = "bullet", block = "all", bypassRagdoll = true, range = 50, color = "blue", tip = "SPECIAL" },
+	-- Throws the gavel 50 studs (3); it comes back after 0.75s. Costs 3% awakening.
+	-- TODO special variant: once it hit, pressing again hops toward the target; recalling with a move or M1.
+	special = K.Projectile{ "No Escape", cooldown = 5, startup = 0.2, damage = 3, range = 50, speed = 200, radius = 2.5, type = "bullet",
+		block = "all", bypassRagdoll = true, awakenCost = 0.03, color = "gold" },
 
 	awakening = {
-		name = "Deadly Sentencing",
-		-- TODO cosmetic/passive "Executioner's Sword": While using the Executioner's Sword, the user's basic attacks will reach from 12 studs away rather than the normal 8, at the expense of lower...
+		name = "Death Penalty",
+		duration = 90,
+		heal = 40,
+		-- Deadly Sentencing: a trial where the defendant confesses, stays silent or denies; the verdict decides the outcome
+		-- (Innocence, Confiscation, Death Penalty). Death Penalty reveals the Executioner's Sword: any cut kills.
+		-- TODO: the trial (Judgment Bar, 3 choices, 6 wrong guesses break it) and Confiscation of abilities.
+		-- TODO passive "Executioner's Sword": M1s reach 12 studs, 6 hits (2 + 2 + (3 x 1) + 1), front dash doesn't ragdoll.
+		domain = K.Domain{ "Deadly Sentencing", duration = 15, sureHit = "none", color = "gold" },
 		abilities = {
-			-- The user charges up a quick forward dash with the Executioner's Sword.
-			[ 1 ] = K.Melee{ "Execution", cooldown = 12, damage = 25, hits = 3, type = "melee", block = "none", ragdoll = { h = 45, v = 18 } },
-			-- The user begins running forwards before spinning around with a swipe of their cursed tool.
-			[ 2 ] = K.Melee{ "Final Judgement", cooldown = 21, damage = 10, type = "melee", block = "none", bypassRagdoll = true, uninterruptible = true },
-			-- The user holds their sword by its blade to knock the target away with its hilt.
-			-- Follow-up: By pressing the move again before the second swing hit is performed, the user will keep holding their cursed tool by its blade to swing...
-			[ 3 ] = K.Melee{ "Verdict", cooldown = 18, damage = 5, type = "melee", blockDamage = 2.5, bypassRagdoll = true, trueRag = true, tip = "USE TWICE", again = K.Melee{ "Verdict", damage = 5, type = "melee", block = "none", bypassRagdoll = true, ragdoll = { h = 45, v = 18 } } },
-			-- The user launches their sword forwards to sever the opponent's limb and apply an Execution stack before recalling it.
-			[ 4 ] = K.Projectile{ "Triple Sentence", cooldown = 12, damage = 8, type = "bullet", block = "pre", bypassRagdoll = true, color = "blue" },
+			-- A quick forward dash with the sword (10) impaling a limb, applying an Execution stack, then a toss (15).
+			[ 1 ] = K.Melee{ "Execution", cooldown = 12, startup = 0.35, damage = 25, hits = 2, interval = 0.5, lunge = 20, type = "special",
+				block = "none", ragdoll = { h = 55, v = 20 }, color = "gold", onHit = Execute },
+			-- Runs forward then spins with a swipe (10); landed, a quick-time event decides between a stab (300) and a kick (25).
+			-- TODO: the QTE. Follow-up: pressing again during the lunge feints it (17s cooldown).
+			[ 2 ] = K.Grab{ "Final Judgement", cooldown = 21, startup = 0.45, damage = 35, hits = 2, interval = 1.2, lunge = 25, uninterruptible = true,
+				type = "special", block = "none", bypassRagdoll = true, trueRag = true, ragdoll = { h = 60, v = 25 } },
+			-- Hilt knock (5), then a dash with the edge (5): unblocked, it executes like Execution.
+			-- Follow-up: pressed again before the edge swing, the hilt swings again (10, 50 if blocked).
+			[ 3 ] = K.Melee{ "Verdict", cooldown = 18, startup = 0.35, damage = 10, hits = 2, interval = 0.55, type = "melee", blockDamage = 5,
+				bypassRagdoll = true, trueRag = true, ragdoll = { h = 45, v = 15 }, onHit = Execute, tip = "USE TWICE",
+				again = K.Melee{ "Verdict: Hilt", window = 0.5, startup = 0.2, damage = 10, type = "melee", block = "none", bypassRagdoll = true,
+					ragdoll = { h = 55, v = 20 } } },
+			-- Throws the sword forward to sever a limb (8, Execution stack) and recalls it; up to three throws. Perfect-blockable.
+			[ 4 ] = K.Projectile{ "Triple Sentence", cooldown = 12, charges = 3, chargeDelay = 0.4, startup = 0.3, damage = 8, range = 60,
+				speed = 220, radius = 2.5, type = "bullet", block = "pre", bypassRagdoll = true, color = "gold", onHit = Execute },
 		},
-		-- Activating their special will cover the user with a thin veil of their own domain expansion around them.
-		special = K.Buff{ "Domain Amplification", cooldown = 8 },
+		-- A thin veil of their domain negates the next attack (about 0.5s of i-frames) and blocks domain sure-hits. Costs 5%.
+		special = K.Buff{ "Domain Amplification", cooldown = 8, startup = 0.2, duration = 0.2, color = "gold",
+			onUse = function( ply ) ply.jjs_amplified = true end },
 	},
-
-	-- TODO tab "Domain Awakening" from the wiki:
-	--   Deadly Sentencing [domain awakening]: Upon activating their Awakening, the user will expand their domain, Deadly Sentencing, which resembles a platform...
 } )
+
+hook.Add( "JJS_PreHit", "JJS_DomainAmplification", function( victim, hit )
+	if not victim.jjs_amplified or hit.attacker == victim then return end
+	victim.jjs_amplified = nil
+	JJS.IFrames( victim, 0.5 )
+	return "evaded"
+end )
+
+hook.Add( "JJS_DomainImmune", "JJS_DomainAmplification", function( ply )
+	if ply.jjs_amplified then return true end
+end )
+
+hook.Add( "JJS_PlayerSpawned", "JJS_ExecutionStacks", function( ply )
+	ply.jjs_execution = nil
+	ply.jjs_amplified = nil
+end )

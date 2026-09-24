@@ -1,7 +1,10 @@
--- Cursed Partners. Generated from the JJS wiki; every move is a JJS.Kit placeholder.
--- Comments summarise what the real move does (see the wiki page for details).
+-- Cursed Partners (Yuta Okkotsu). Moves are JJS.Kit placeholders built from the wiki numbers;
+-- comments describe what the real move does.
+-- The special summons Rika and switches to her moveset (the alternate set) and back.
 
 local K = JJS.Kit
+
+local RIKA = K.Toggle{ "Rika", cooldown = 1, color = "pink" }
 
 K.Character( "cursedpartners", {
 	name = "Cursed Partners",
@@ -11,66 +14,97 @@ K.Character( "cursedpartners", {
 	color = Color( 255, 120, 200 ),
 
 	passives = {
-		{ "Swordsmanship", "The user is equipped with a holster for their katana and a necklace tied to a cursed ring." },
+		{ "Swordsmanship", "Cosmetic: necklace, katana holster and a custom block animation." },
 	},
 
 	abilities = {
-		-- The user slides 18 studs forwards while sweeping the floor with their blade and imbuing it with cursed energy.
-		-- TODO direction: backward variant "Veilstep": Walking backwards while using Severing Path will prompt the user to retreat with a back roll, traveling about 27 studs while gaining...
-		[ 1 ] = K.Melee{ "Severing Path", cooldown = 15, damage = 10.9, hits = 2, type = "melee", bypassRagdoll = true, tip = "DIRECTION" },
-		-- By aiming at a spot within 25 studs, the user vanishes while winding up a long swing of their tool, before reappearing to finish the attack with a slash aiming for...
-		-- Follow-up "Resolute Black Flash": Using the move again right as the user reappears will allow them to vanish a second time then reappear with a heavy blow wound up and...
-		[ 2 ] = K.Melee{ "Resolute Slash", cooldown = 15, damage = 12, type = "melee", block = "none", tip = "USE AGAIN", again = K.Melee{ "Resolute Black Flash", damage = 12, type = "melee", block = "none", bypassRagdoll = true } },
-		-- The user holds their holstered katana by the handle to apply cursed energy to their incoming swing, triggering a giant mostly uncounterable burst that deals damage...
-		[ 3 ] = K.Counter{ "Outburst", cooldown = 16, counters = { melee = "evade", bullet = "evade" }, riposte = 2 },
-		-- The user rushes 20 studs forward while gaining melee i-frames by boosting their feet with cursed energy.
-		-- TODO variant: Using Severing Path right as the user collides with a defenseless standing target will switch their strategy from attempting to grab...
-		[ 4 ] = K.Grab{ "Second Wind", cooldown = 16, damage = 10, hits = 2, type = "melee", block = "all", armor = "melee" },
+		-- Slides 18 studs sweeping the floor (4); on hit, locks the enemy and follows with 3 swings (2.3 each), the last launching.
+		-- TODO direction variant "Veilstep": walking backward, a 27 stud back roll with melee i-frames (9).
+		[ 1 ] = K.Grab{ "Severing Path", cooldown = 15, startup = 0.25, damage = 10.9, hits = 4, interval = 0.2, lunge = 18, type = "melee",
+			bypassRagdoll = true, ragdoll = { h = 10, v = 55 }, tip = "DIRECTION" },
+		-- Aiming at a spot within 25 studs, vanishes while winding up and reappears slashing at the neck.
+		-- Follow-up "Resolute Black Flash": pressed again as they reappear, vanishes again for a Black Flash (12, melee i-frames).
+		[ 2 ] = K.Target{ "Resolute Slash", cooldown = 15, range = 25, startup = 0.45, damage = 12, type = "melee", block = "none",
+			ragdoll = { h = 40, v = 15 }, tip = "USE AGAIN",
+			again = K.Target{ "Resolute Black Flash", window = 0.8, range = 25, startup = 0.3, damage = 12, iframes = 0.4, type = "melee",
+				block = "none", bypassRagdoll = true, color = "black", ragdoll = { h = 60, v = 25 } } },
+		-- A cursed-energy swing (2) triggering a 13x13 stud burst (4, +2 per held stage) that damages through block and launches upward.
+		-- TODO hold stages (up to +6) and the parry: hit within 0.25s, it parries melee/bullets.
+		[ 3 ] = K.AoE{ "Outburst", cooldown = 16, startup = 0.5, damage = 6, hits = 2, interval = 0.15, radius = 7, offset = 5, type = "explosion",
+			blockDamage = 3, bypassRagdoll = true, ragdoll = { h = 10, v = 50 }, color = "pink", tip = "HOLD" },
+		-- Rushes 20 studs with melee i-frames; grabs a met enemy by the face (2) and slams them (8). Can be retried once if missed.
+		-- TODO variant: Severing Path on collision pummels instead (15).
+		[ 4 ] = K.Grab{ "Second Wind", cooldown = 16, startup = 0.2, damage = 10, hits = 2, interval = 0.5, lunge = 20, type = "melee",
+			block = "all", armor = "melee", ragdoll = { h = 5, v = -30 }, crater = 800 },
 	},
-	-- Upon using the special, Rika, the Queen of Curses, will partially manifest to the user’s right and stay by their side, functioning as a separate, intangible,...
-	special = K.Mobility{ "Rika", uninterruptible = true, travel = 100 },
+	special = RIKA,
+
+	-- Rika's base moves (shared cooldown in the real game)
+	alt = {
+		name = "Rika",
+		abilities = {
+			-- Rika's fist grows above the target and slams down, bouncing them upward. Air target: dunks them (8).
+			[ 1 ] = K.Target{ "Rika Smash", cooldown = 10, teleport = false, range = 45, startup = 0.6, damage = 10, type = "bullet", block = "all",
+				bypassRagdoll = true, uninterruptible = true, ragdoll = { h = 5, v = 45 }, color = "pink" },
+			-- Rika boosts the user slightly forward (up while airborne); feints the current move onto a shorter cooldown.
+			[ 2 ] = K.Mobility{ "Rika Launch", cooldown = 10, travel = 22, time = 0.3, dir = "forward", air = { dir = "up", travel = 18 } },
+			-- Rika hovers to a target within 10 studs of her and winds up a heavy blow (12, 18 if blocked).
+			[ 3 ] = K.Target{ "Rika Haymaker", cooldown = 10, teleport = false, range = 20, startup = 0.8, damage = 12, type = "bullet",
+				bypassRagdoll = true, uninterruptible = true, ragdoll = { h = 80, v = 25 }, color = "pink" },
+		},
+		special = RIKA,
+	},
 
 	awakening = {
 		name = "True Love",
 		duration = 60,
 		heal = 25,
-		-- The user calls out to their cursed spirit companion to make a binding vow: "Come, Rika.
-		-- TODO awakening ability "Copy Wheel": The user's own technique allows them to copy and use the cursed technique of any enemy Rika has attacked (via Rika Downslam, Rika Slam, or Elbow...
-		-- TODO cometic/passive "Steel Arm": After equipping their new weapon, the player utilizes their steel casing to empower their attacks, adding a quick jab that follows each of the...
+		-- "Come, Rika. Give me everything." Rika fully manifests and wraps a steel casing around the user's arm.
+		-- TODO awakening ability "Copy Wheel": techniques copied from enemies Rika hit, picked with G, used through Copy.
+		-- TODO passive "Steel Arm": the first 3 M1s add a quick jab ((4 + 0.5) + (4 + 0.5) + (0.5 + 0.5) + 4).
 		abilities = {
-			-- The user dashes forwards, traveling about 38.5 studs while swinging their right arm to land an elbow strike that sends the opponent spinning away, before quickly...
-			[ 1 ] = K.Melee{ "Elbow Rush", cooldown = 15, damage = 4, hits = 2, type = "melee", block = "none", lunge = 38.5 },
-			-- By default, the user possesses the Cursed Speech technique which, by bearing the Snake Eyes and Fangs mark around their mouth, allows them to command to all players...
-			[ 2 ] = K.Buff{ "Copy", cooldown = 15, block = "all" },
-			-- The user pulls out their cursed tool and drives it into the floor while imbuing it with cursed energy to create a field around them that will push all enemies within...
-			-- Follow-up "Fakeout": Using the move once again before the katana hits the ground will cancel it with a sudden swing that will transfer its imbued cursed...
-			[ 3 ] = K.AoE{ "Energy Ripple", cooldown = 18, damage = 19, type = "explosion", block = "none", bypassRagdoll = true, uninterruptible = true, radius = 27, ragdoll = { h = -20, v = 16 }, color = "orange", tip = "USE AGAIN", again = K.Melee{ "Fakeout", damage = 19, hits = 2, type = "melee", block = "none", bypassRagdoll = true, uninterruptible = true } },
-			-- The user casts their Domain Expansion, conjuring a stone platform with several structures rising from the ground, and knots symbolizing their love circling the sky.
-			-- Follow-up "Jacob's Ladder": After landing 4 direct swings using their domain's katanas, the user can conjure a divine ray from the sky by using their domain again...
-			[ 4 ] = K.Domain{ "Authentic Mutual Love", cooldown = 120, duration = 45, sureHit = "none", color = "white", tip = "USE AGAIN", again = K.Beam{ "Jacob's Ladder", damage = 62.5, block = "none", bypassRagdoll = true, trueRag = true, armor = "total", color = "white" } },
+			-- Dashes ~38.5 studs into an elbow strike (4), appears behind with Rika for a barrage (5, 8 with Rika) and a final blow (6).
+			[ 1 ] = K.Grab{ "Elbow Rush", cooldown = 15, startup = 0.3, damage = 15, hits = 5, interval = 0.25, lunge = 38.5, type = "melee",
+				block = "none", ragdoll = { h = 80, v = 25 } },
+			-- Cursed Speech by default: "Don't move!" stuns everyone within 35 studs.
+			-- TODO: the copied technique selected on the Copy Wheel replaces this.
+			[ 2 ] = K.AoE{ "Copy: Cursed Speech", cooldown = 15, startup = 0.5, damage = 0, radius = 35, stun = 1.5, type = "special", block = "all",
+				color = "purple" },
+			-- Drives the katana into the floor, pushing all enemies within 27 studs away (19).
+			-- Follow-up "Fakeout": pressed again before the katana lands, a sudden swing (7) transfers the burst (12).
+			[ 3 ] = K.AoE{ "Energy Ripple", cooldown = 18, startup = 0.6, damage = 19, radius = 27, type = "explosion", block = "none",
+				bypassRagdoll = true, uninterruptible = true, ragdoll = { h = 60, v = 20 }, color = "pink", tip = "USE AGAIN",
+				again = K.Melee{ "Fakeout", window = 0.5, startup = 0.2, damage = 19, hits = 2, interval = 0.25, type = "melee", block = "none",
+					bypassRagdoll = true, ragdoll = { h = 60, v = 20 } } },
+			-- Domain Expansion: blades rain down imbued with random techniques (Shrine, Thin Ice Breaker, Clairvoyance,
+			-- Cursed Speech, Shikigami) that the user picks up and swings. Breaks with no enemy inside.
+			-- TODO: the katanas and "Jacob's Ladder" (62.5, after 4 direct katana swings).
+			[ 4 ] = K.Domain{ "Authentic Mutual Love", cooldown = 120, duration = 45, sureHit = "none", color = "pink" },
 		},
-		-- Despite being fully manifested, Rika still functions similarly in base.
-		special = K.Buff{ "Rika", uninterruptible = true },
+		special = RIKA,
+
+		-- Awakened Rika: separate cooldowns
+		alt = {
+			name = "Rika (Awakened)",
+			abilities = {
+				-- Rika slams the target into the floor with one arm (8), then a second impact (4).
+				[ 1 ] = K.Target{ "Rika Downslam", cooldown = 13, teleport = false, range = 45, startup = 0.4, damage = 12, hits = 2, interval = 0.4,
+					type = "melee", block = "none", bypassRagdoll = true, uninterruptible = true, ragdoll = { h = 5, v = -30 }, color = "pink" },
+				-- Rika grabs the target by the leg and slams them five times (1 + 2 x 4 + 3).
+				[ 2 ] = K.Target{ "Rika Slam", cooldown = 13, teleport = false, range = 45, startup = 0.4, damage = 12, hits = 6, interval = 0.3,
+					type = "melee", block = "none", bypassRagdoll = true, uninterruptible = true, ragdoll = { h = 30, v = 30 }, color = "pink" },
+				-- Rika powers a pink orb into an overwhelming beam (100; less the more players hit and the farther). Beam clash rank 3.
+				-- Follow-up: pressed again in the windup, a smaller faster beam (22.4).
+				[ 3 ] = K.Beam{ "True Love Beam", cooldown = 40, startup = 1.8, damage = 100, duration = 1.5, tick = 0.25, range = 160, radius = 7,
+					pierce = true, clash = 3, type = "explosion", block = "none", bypassRagdoll = true, color = "pink", crater = 1800,
+					ragdoll = { h = 60, v = 25 }, tip = "USE AGAIN",
+					again = K.Beam{ "True Love Beam: Quick", window = 1.5, startup = 0.2, damage = 22.4, range = 120, radius = 4, pierce = true,
+						type = "explosion", block = "none", bypassRagdoll = true, color = "pink" } },
+				-- Rika throws the user; crashing into an enemy ragdolls them (8-18 by airtime). Missing hurts the user (0.5-22).
+				[ 4 ] = K.Mobility{ "Rika Throw", cooldown = 13, startup = 0.5, travel = 45, time = 0.5, dir = "aim", damage = 13, type = "melee",
+					bypassRagdoll = true, ragdoll = { h = 55, v = 25 } },
+			},
+			special = RIKA,
+		},
 	},
-
-	-- TODO tab "Awakened Rika" from the wiki:
-	--   Rika Downslam: The user motions for Rika to slam the target arm into the floor by applying pressure on them with one arm.
-	--   Rika Slam: Rika hovers over to a target before grabbing them by their leg, and slamming them five times on the ground in anger.
-	--   True Love Beam: Using their combined cursed energy, Rika and the user conjure a small pink orb, before Rika takes over as she grows...
-	--   Rika Throw: The user crosses their arms for Rika to pick them up, she wind back her arm and throw them with force.
-
-	-- TODO tab "Authentic Mutual Love" from the wiki:
-	--   Shrine: If the katana hits an enemy, the user will activate the secondary blade of Shrine, Cleave, slashing them 4 times,...
-	--   Thin Ice Breaker: The user strengthens their katana blow using an extension technique of "Sky Manipulation", and breaks the sky like a...
-	--   Clairvoyance: Once in contact with an opponent, the user slashes them with their katana and draws blood to mark them with a manga...
-	--   Cursed Speech: Once in contact with an opponent, the user strikes them with their katana and commands to them: "落ちれ!" (pronounced:...
-	--   Shikigami: Once in contact with an opponent, the user sends 3 flying shikigamis resembling Rika's head with wings, to swarm the...
-
-	-- TODO tab "Base Rika" from the wiki:
-	--   Rika Smash: Rika's fist will grow in size as it is raised above the target, before slamming down on them and causing them to...
-	--   Rika Launch: The user quickly motions for Rika to move behind and quickly give them a boost, launching them slightly forward.
-	--   Rika Haymaker: Rika hovers over to the targeted enemy if they are within 10 studs of her, then slowly winds up a heavy blow that...
-
-	-- TODO other entries of the base moveset:
-	--   Outburst [bullet counter]: If the user is hit within 0.25 seconds of Outburst, their swing will parry the incoming attack.
 } )

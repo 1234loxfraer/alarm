@@ -1,38 +1,57 @@
--- Strongest Of History. Generated from the JJS wiki; every move is a JJS.Kit placeholder.
--- Comments summarise what the real move does (see the wiki page for details).
+-- Strongest Of History (Heian Sukuna, overpowered). Moves are JJS.Kit placeholders built from the wiki numbers;
+-- comments describe what the real move does.
+-- Incantation (special) chants up to 4 times; the chant count (mode) upgrades Strong Dismantle.
 
 local K = JJS.Kit
+
+local function ResetChant( ply ) ply:SetJMode( 0 ) end
 
 K.Character( "strongestofhistory", {
 	name = "Strongest Of History",
 	category = "op",
 	hp = 100,
+	scale = 1.4,
 	model = K.Model( "strongestofhistory", "models/player/charple.mdl" ),
 	color = Color( 255, 60, 60 ),
 
 	passives = {
-		{ "Pinnacle Of Jujutsu Sorcery", "The legends never lied about the King of Curses, since being described as an imaginary demon was likely a result of the unique body structure the user possesses, that being their significant size,..." },
+		{ "Pinnacle Of Jujutsu Sorcery", "Cosmetic: an extra pair of arms and 1.4x size." },
 	},
 
 	abilities = {
-		-- The player does a swinging gesture with their left arm aiming forward, sending two large slashes towards the target.
-		-- TODO special variant "Dismantle Barrage": Upon reciting of one incantation, the player will swing their arm forwards while exclaiming: "解" (pronounced: Kai, and means...
-		-- TODO special variant "Disgraced Sovereign": After reciting two incantations, the user will levitate upwards with their arms spread out and laugh as they increasingly release more...
-		-- TODO special variant "World Cutting Slash": Upon reciting three incantations, the user will extend their hand before them as they utter: "分を弁えろ" (pronounced: Bun-o Wakimaero, and...
-		[ 1 ] = K.Melee{ "Strong Dismantle", cooldown = 4, damage = 20, hits = 2, type = "melee", block = "none", bypassRagdoll = true, tip = "SPECIAL" },
-		-- The user conjures fire from their hands as they proceed to aggressively clap twice to gain i-frames and mold the flames into an arrow while saying: "構えろ" (pronounced:...
-		[ 2 ] = K.Melee{ "Open FURNACE", cooldown = 12, damage = 70, type = "melee", block = "none", bypassRagdoll = true },
-		-- The player winds their fist back while coating it with cursed energy and exclaims: "失せろ!" (pronouced: Usero, and means "Get lost") before lunging forward a large...
-		-- Follow-up: If quickly pressed again during the initial stun prior to the full wind-up of their arm, the user will imbue their blow with cursed...
-		[ 3 ] = K.Melee{ "Cleave Rush", cooldown = 5, damage = 150, type = "melee", block = "none", tip = "USE TWICE", again = K.Melee{ "Cleave Rush", damage = 35, type = "melee", block = "none" } },
-		-- The user pulls out a vajra-like cursed tool, Kamutoke, wielding it on their right hand and pointing it upwards, calling forth several torrents of lightning to strike...
-		[ 4 ] = K.Melee{ "Kamutoke", cooldown = 7, damage = 15, type = "melee", block = "none", bypassRagdoll = true },
+		[ 1 ] = K.ByMode{
+			-- No chant: two large slashes toward the target (10 each).
+			K.Projectile{ "Strong Dismantle", cooldown = 4, startup = 0.3, damage = 10, count = 2, volley = 0.3, range = 90, speed = 260, radius = 6,
+				pierce = true, type = "special", block = "none", bypassRagdoll = true, color = "red" },
+			-- 1 chant, "Dismantle": a barrage of six Dismantles (5 each).
+			K.Projectile{ "Dismantle Barrage", cooldown = 4, startup = 0.3, damage = 5, count = 6, volley = 0.1, spread = 5, range = 90, speed = 260,
+				radius = 5, pierce = true, type = "special", block = "none", bypassRagdoll = true, color = "red", onUse = ResetChant },
+			-- 2 chants: levitates releasing more and more slashes within 25 studs (14), then eradicates everything within 27.5 (5).
+			K.AoE{ "Disgraced Sovereign", cooldown = 4, startup = 0.5, damage = 19, hits = 8, interval = 0.2, radius = 27.5, type = "special",
+				blockDamage = 8.5, bypassRagdoll = true, color = "red", ragdoll = { h = 50, v = 30 }, onUse = ResetChant },
+			-- 3 chants, "Know your place": a vertical World Cutting Slash splitting anyone in its trajectory (150).
+			K.Beam{ "World Cutting Slash", cooldown = 4, startup = 0.6, damage = 150, range = 200, radius = 3, pierce = true, type = "special",
+				block = "none", bypassRagdoll = true, color = "red", onUse = ResetChant },
+			-- 4 chants, "It's over": a grid of dismantles travelling ~150 studs, killing anyone caught (150).
+			K.Projectile{ "Dismantle Net", cooldown = 4, startup = 0.5, damage = 150, range = 150, speed = 150, radius = 14, pierce = true,
+				type = "special", block = "none", bypassRagdoll = true, color = "red", onUse = ResetChant },
+		},
+		-- Claps twice for i-frames, molds flames into an arrow ("Prepare") and fires it ("Open") at high speed (70, 15-30 shockwave).
+		[ 2 ] = K.Projectile{ "Open FURNACE", cooldown = 12, startup = 1.2, damage = 70, iframes = 1.2, range = 150, speed = 250, radius = 6,
+			type = "explosion", block = "none", bypassRagdoll = true, explode = 18, crater = 2200, ragdoll = { h = 80, v = 40 }, color = "orange" },
+		-- "Get lost!": lunges a large distance; landed, holds them by the face ("Brat!") and cleaves (150).
+		-- Follow-up: pressed again during the stun, a Black Flash (35, stays off cooldown if it lands).
+		[ 3 ] = K.Grab{ "Cleave Rush", cooldown = 5, startup = 0.4, damage = 150, hits = 2, interval = 0.8, lunge = 45, type = "special", block = "none",
+			ragdoll = { h = 80, v = 30 }, tip = "USE TWICE",
+			again = K.Melee{ "Cleave Rush: Black Flash", window = 0.6, startup = 0.15, damage = 35, type = "melee", block = "none", color = "black",
+				ragdoll = { h = 90, v = 25 } } },
+		-- Kamutoke calls torrents of lightning around the user, flinging people away (15 per bolt).
+		[ 4 ] = K.AoE{ "Kamutoke", cooldown = 7, startup = 0.6, damage = 45, hits = 3, interval = 0.3, radius = 25, type = "special", block = "none",
+			bypassRagdoll = true, crater = 1500, ragdoll = { h = 50, v = 40 }, color = "cyan" },
 	},
-	-- The user crosses their arms and makes a hand sign while chanting, with each of the first three incantations granting a different, superior variation of Strong Dismantle.
-	-- TODO special variant "Dismantle Net": On the fourth incantation, the player will say "終わりだ" (pronounced: Owarida, means "It's over.") as they point their left hand forward to...
-	special = K.Buff{ "Incantation", cooldown = 2, tip = "SPECIAL" },
+	-- Crosses the arms and chants ("Scale Of The Dragon.", "Recoil."...). Costs 5% awakening.
+	special = K.Modes{ "Incantation", cooldown = 2, modes = { "", "CHANT 1", "CHANT 2", "CHANT 3", "CHANT 4" }, color = "red" },
 
-	-- Base-only: the awakening is a single move
-	-- Upon using their Awakening, the user crosses their fingers as a pop-up cutscene plays while a speech bubble covers everyone's screens reading: DOMAIN EXPANSION.
-	awakenMove = K.Domain{ "Incomplete Shrine", duration = 20, sureHit = "damage", dps = 14, color = "white" },
+	-- Domain awakening: an unenclosed Malevolent Shrine whose slashes reach far (3 per slash, 0.5 if blocked) for 20s.
+	awakenMove = K.Domain{ "Incomplete Shrine", duration = 20, radius = 90, sureHit = "damage", dps = 14, color = "red" },
 } )

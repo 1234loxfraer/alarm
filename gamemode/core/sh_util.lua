@@ -153,6 +153,7 @@ end
 function JJS.ApplyScale( ply )
 	local char = JJS.GetChar( ply )
 	local sc = char and char.scale or 1
+	if char and ply:GetJAwakened() and char.awakening and char.awakening.scale then sc = char.awakening.scale end
 	if ply.jjs_scale == sc and ply:GetModelScale() == sc then return end
 	ply.jjs_scale = sc
 	if SERVER then ply:SetModelScale( sc, 0 ) end

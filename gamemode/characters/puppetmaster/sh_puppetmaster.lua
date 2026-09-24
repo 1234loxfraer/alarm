@@ -1,5 +1,6 @@
--- Puppet Master. Generated from the JJS wiki; every move is a JJS.Kit placeholder.
--- Comments summarise what the real move does (see the wiki page for details).
+-- Puppet Master (Kokichi Muta / Mechamaru). Moves are JJS.Kit placeholders built from the wiki numbers;
+-- comments describe what the real move does.
+-- Awakened, the user pilots the giant Mode: Absolute mech (~117 HP).
 
 local K = JJS.Kit
 
@@ -11,52 +12,65 @@ K.Character( "puppetmaster", {
 	color = Color( 140, 170, 190 ),
 
 	passives = {
-		{ "Ultimate Proxy", "Due to their Heavenly Restriction making their body frail and fragile." },
-		{ "Energy Reserves", "A benefit of the user's Heavenly Restriction is their ability to exceed the natural limits of cursed energy that they can gain at a time." },
+		{ "Ultimate Proxy", "Cosmetic: a metal forearm guard that sparks on hit." },
+		{ "Energy Reserves", "A second awakening bar keeps filling once the first is full (+50% speed) and extends Absolute. (TODO)" },
 	},
 
 	abilities = {
-		-- The puppet's right hand reveals several sharp claws as their forearm starts spinning rapidly.
-		-- TODO special variant: If Offload is toggled on, the puppet will land in front of the original puppet while facing them to perform the same Ultra Drill with...
-		[ 1 ] = K.Melee{ "Ultra Spin", cooldown = 15, damage = 13.5, hits = 2, type = "melee", lunge = 15, tip = "SPECIAL" },
-		-- The puppet will spin around to stand on its hands and grab with its legs.
-		[ 2 ] = K.Grab{ "Boost On", cooldown = 16, damage = 10, hits = 2, type = "melee", block = "none", bypassRagdoll = true },
-		-- The puppet points forwards with their left arm as they wind up a long blast of energy from the palm of their hand to blast their opponent with.
-		-- Hold variant "Ultimate Cannon": By holding this move's input for 1.3 seconds, the puppet switches to Mode: Albatross, protuding a cannon from their mouth and placing...
-		-- TODO special variant: If Offload is toggled on, an expendable copy will land to the left of the original and keep Ultra Cannon wound up while aiming on its...
-		[ 3 ] = K.AoE{ "Ultra Cannon", cooldown = 17, damage = 10, type = "explosion", block = "all", bypassRagdoll = true, color = "orange", tip = "HOLD", hold = { time = 1.3, damage = 16.15, block = "none", ragdoll = true } },
-		-- The puppet activates Boost On to eject itself forwards, before using their boosters to unleash a cloud of scorching flames that will fry the opponent and knock them...
-		-- Follow-up: If used once again after their hop, the puppet will turn off Boost On and end its attack early by releasing a significantly smaller...
-		-- TODO special variant: If Offload is toggled on, the puppet will bring in a replacement that will launch itself forwards with Boost On a straight line and end...
-		[ 4 ] = K.AoE{ "Heat Emission", cooldown = 16, damage = 13, type = "explosion", block = "none", bypassRagdoll = true, color = "orange", tip = "USE TWICE", again = K.AoE{ "Heat Emission", damage = 9, type = "explosion", block = "all", bypassRagdoll = true, color = "orange" } },
+		-- The forearm spins with claws out; lunges forward, drills through the torso (9.5) and slams them up with AoE damage (4).
+		[ 1 ] = K.Grab{ "Ultra Spin", cooldown = 15, startup = 0.35, damage = 13.5, hits = 4, interval = 0.25, lunge = 15, type = "melee",
+			ragdoll = { h = 10, v = 50 }, tip = "SPECIAL" },
+		-- Stands on its hands to grab with its legs (4), boosts into the sky and fires a point-blank Ultra Cannon (6).
+		[ 2 ] = K.Grab{ "Boost On", cooldown = 16, startup = 0.35, damage = 10, hits = 2, interval = 0.6, type = "melee", block = "none",
+			bypassRagdoll = true, ragdoll = { h = 40, v = 45 } },
+		-- A long energy blast from the palm (can be delayed a second by holding).
+		-- Hold 1.3s "Ultimate Cannon": Mode Albatross, a small ragdolling explosion then a continuous fiery beam for 17 ticks (16.15).
+		[ 3 ] = K.Beam{ "Ultra Cannon", cooldown = 17, startup = 0.8, damage = 10, range = 60, radius = 3, type = "explosion", block = "all",
+			bypassRagdoll = true, color = "cyan", ragdoll = { h = 50, v = 20 },
+			hold = { time = 1.3, damage = 16.15, duration = 1.1, tick = 0.066, block = "none", radius = 5, color = "orange" } },
+		-- Boost On ejects the puppet forward, then its boosters unleash scorching flames that knock the opponent upward.
+		-- Follow-up: used again after the hop, ends early with a smaller blast (9, 360 blockable).
+		[ 4 ] = K.Melee{ "Heat Emission", cooldown = 16, startup = 0.45, damage = 13, lunge = 15, reach = 10, width = 10, type = "explosion",
+			block = "none", bypassRagdoll = true, color = "orange", ragdoll = { h = 10, v = 55 }, tip = "USE TWICE",
+			again = K.AoE{ "Heat Emission: Early", window = 0.5, startup = 0.1, damage = 9, radius = 8, offset = 5, type = "explosion", block = "all",
+				bypassRagdoll = true, color = "orange", ragdoll = { h = 20, v = 35 } } },
 	},
-	-- Activating the special will envelop the puppet in cursed energy, indicating that its next move (Boost On excluded) will stay off cooldown while an expendable puppet...
-	-- TODO special variant "Übercharge": If Offload is used while on cooldown, the cursed energy around the puppet will be red.
-	-- TODO special variant "Puppet Barrage": Using the special while a non-Übercharge Offload is activated target within 100 studs will call down for two cursed corpses to surround...
-	special = K.Melee{ "Offload", cooldown = 10, damage = 3, type = "melee", block = "none", uninterruptible = true, ragdoll = { h = 45, v = 18 }, tip = "SPECIAL" },
+	-- The puppet's next move is done by an expendable copy that self destructs (3), keeping the move off cooldown.
+	-- TODO: Übercharge (used on cooldown), Puppet Barrage (14) and the per-move Offload variants.
+	special = K.Buff{ "Offload", cooldown = 10, startup = 0.2, duration = 0.2, color = "cyan" },
 
 	awakening = {
 		name = "Absolute",
-		duration = 8,
-		heal = 117,
-		-- The user activates Mode: Absolute, dismissing their original puppet to pilot a giant mech 5 times bigger than normal, which will climb out of the ground, power up,...
-		-- TODO passive "Mode: Absolute": Due to the mechanisms of their robot, the user will have to engage in combat while taking in many factors: *Each part of the robot counts as a...
-		-- TODO passive "Mode: Absolute": Rather than performing a regular forward dash, the mech will wind up a heavy kick that can only target stunned/ragdolled enemies.
-		-- TODO passive "Mode: Absolute": If the mech itself is airborne, the front dash will become a powerful AoE dropkick, flinging enemies upwards.
-		-- TODO passive "Last Chance": If the mech's HP reaches 0, a puppet will hop out of it and rush downwards with a final last-ditch attack: a drill that will allow the puppet to...
+		duration = 90,
+		hp = 117,
+		scale = 3, -- the wiki mech is 5x bigger; 3x keeps it playable on normal maps
+		-- The giant mech climbs out of the ground, powers up and roars. Duration depends on energy reserves (8s to 180s).
+		-- TODO passives "Mode: Absolute": limbs take ~47% damage, no ragdoll/stun (stagger instead), M1s 6 each,
+		-- forward dash becomes a kick on stunned targets (10), aerial dropkick (12), 2s jump cooldown.
+		-- TODO passive "Last Chance": at 0 HP a puppet jumps out for a last drill (15) that restores its health if it lands.
 		abilities = {
-			-- Using one year of the user's stored cursed energy, the mech holds one arm in front of it and blasts the area in front of it with fiery energy that sets any targets...
-			-- TODO special variant: If Energy Output was set to the second level or higher, then the mech will consume 2 years of the user's stored cursed energy to charge...
-			[ 1 ] = K.AoE{ "Miracle Cannon", cooldown = 8, damage = 20, type = "explosion", block = "none", bypassRagdoll = true, uninterruptible = true, color = "orange", tip = "SPECIAL" },
-			-- After aiming at a target within 250 studs, the mech unleashes three rainbow beams forwards and directs them to home in and chase down the enemy, at the cost of 3...
-			[ 2 ] = K.Projectile{ "Pigeon Viola", cooldown = 8, damage = 15, type = "bullet", block = "none", bypassRagdoll = true, uninterruptible = true, range = 250, color = "blue" },
-			-- The giant mech utilizes one year worth of cursed energy to begin rampaging through the environment, stomping around 3 times with swarm damage before finishing with a...
-			-- Air variant: If the mech is airborne, then it will immediately skip to the final slam, directing itself forwards to use its weight and crush anything...
-			[ 3 ] = K.Summon{ "Absolute Destruction", cooldown = 8, damage = 4, type = "explosion", block = "none", bypassRagdoll = true, uninterruptible = true, color = "orange", air = { damage = 20 } },
-			-- While aiming at a target within 100 studs, the mechanized puppet consumes one year of cursed energy to deploy a technique-imbued projectile from a compartment in its...
-			[ 4 ] = K.Target{ "Technique Charge", cooldown = 8, damage = 20, hits = 2, type = "explosion", block = "none", bypassRagdoll = true, uninterruptible = true, range = 100 },
+			-- One year of stored energy: an arm blasts the area in front with fire (20).
+			-- TODO special variant: Energy Output 2+ charges a massive exploding sphere (35).
+			[ 1 ] = K.Beam{ "Miracle Cannon", cooldown = 8, startup = 0.7, damage = 20, range = 50, radius = 10, pierce = true, type = "explosion",
+				block = "none", bypassRagdoll = true, uninterruptible = true, color = "orange", ragdoll = { h = 50, v = 25 }, tip = "SPECIAL" },
+			-- Aiming at a target within 250 studs, three rainbow beams home in and chase them (5 each, +1 per output level).
+			[ 2 ] = K.Target{ "Pigeon Viola", cooldown = 8, teleport = false, range = 250, cone = 0.9, startup = 0.6, damage = 15, hits = 3,
+				interval = 0.2, type = "bullet", block = "none", bypassRagdoll = true, uninterruptible = true, color = "pink" },
+			-- Rampages with 3 stomps (4 each, swarm) then leaps into a crushing slam (20). Air variant: straight to the slam.
+			[ 3 ] = K.AoE{ "Absolute Destruction", cooldown = 8, startup = 0.4, damage = 32, hits = 4, interval = 0.4, radius = 22, offset = 8,
+				type = "explosion", block = "none", bypassRagdoll = true, uninterruptible = true, crater = 2000, color = "orange",
+				ragdoll = { h = 30, v = 40 }, air = { damage = 20, hits = 1 } },
+			-- Aiming within 100 studs, locks on for ~2s and fires a technique-imbued shot (20, +1 per level).
+			-- At output level 5 it carries a Simple Domain that shatters the target's domain.
+			[ 4 ] = K.Target{ "Technique Charge", cooldown = 8, teleport = false, range = 100, startup = 1.8, damage = 20, type = "explosion",
+				block = "none", bypassRagdoll = true, uninterruptible = true, color = "cyan", ragdoll = { h = 10, v = 55 },
+				onHit = function( ply, victim )
+					for _, d in ipairs( JJS.Domain.All() ) do
+						if d:GetCaster() == victim then JJS.Domain.Collapse( d ) end
+					end
+				end },
 		},
-		-- The user employs a bonus of their Heavenly Restriction that allows them to amplify the mech's attacks by increasing their cursed energy output level.
-		special = K.Buff{ "Energy Output", uninterruptible = true },
+		-- Each press raises the cursed energy output level (0-5): stronger next move, higher cost. (Levels are a TODO.)
+		special = K.Modes{ "Energy Output", cooldown = 0.3, modes = { "LV 0", "LV 1", "LV 2", "LV 3", "LV 4", "LV 5" }, color = "cyan" },
 	},
 } )

@@ -2,6 +2,7 @@
 --   complete characters play a short invulnerable sequence, heal, then use their awakening
 --   kit for its duration (awakening.domain expands right away for domain awakenings);
 --   base-only characters perform their single awakening move instead (char.awakenMove).
+--   awakening.hp sets a different max health while awakened, awakening.scale a different size.
 -- Characters can replace the activation with their own (char.Awaken) and react to G while
 -- awakened or at any time (char.AwakenPress returning true consumes the press).
 -- While awakened the bar shows the time left.
@@ -62,6 +63,12 @@ function JJS.EnterAwakening( ply, duration, heal )
 	ply:SetJKitSet( 0 )
 	ply.jjs_awakenDur = duration
 	for i = 1, 5 do ply[ "SetJCD" .. i ]( ply, 0 ) end
+	local aw = JJS.GetChar( ply ).awakening
+	if aw and aw.hp and SERVER then
+		ply:SetMaxHealth( aw.hp )
+		ply:SetJHP( aw.hp )
+		ply:SetHealth( aw.hp )
+	end
 	if heal and SERVER then JJS.Heal( ply, heal ) end
 	hook.Run( "JJS_Awakened", ply )
 end
@@ -72,6 +79,13 @@ function JJS.ExitAwakening( ply )
 	ply:SetJAwakenEnd( 0 )
 	ply:SetJKitSet( 0 )
 	for i = 1, 5 do ply[ "SetJCD" .. i ]( ply, 0 ) end
+	local char = JJS.GetChar( ply )
+	if SERVER and char.awakening and char.awakening.hp and ply:Alive() then
+		ply:SetMaxHealth( char.hp )
+		local hp = math.min( ply:GetJHP(), char.hp )
+		ply:SetJHP( hp )
+		ply:SetHealth( math.ceil( hp ) )
+	end
 	hook.Run( "JJS_AwakeningEnd", ply )
 end
 

@@ -1,5 +1,6 @@
--- Star Rage. Generated from the JJS wiki; every move is a JJS.Kit placeholder.
--- Comments summarise what the real move does (see the wiki page for details).
+-- Star Rage (Yuki Tsukumo, base-only). Moves are JJS.Kit placeholders built from the wiki numbers;
+-- comments describe what the real move does.
+-- Mass (Res1, 0..1) is built by holding the special and spent by the special variants (TODO).
 
 local K = JJS.Kit
 
@@ -11,29 +12,35 @@ K.Character( "starrage", {
 	color = Color( 255, 200, 90 ),
 
 	passives = {
-		{ "Garuda", "The user possesses an animated serpentine shikigami, Garuda, that will keep floating around them and aid them in their offense during Garuda Rebound and Garuda Stab." },
+		{ "Garuda", "Cosmetic: a serpentine shikigami orbiting the user." },
 	},
 
 	abilities = {
-		-- The user kicks their shikigami forwards with slight auto-aim as it curls up into a ball-shaped cursed tool, causing it to hit the target's torso and hover back to...
-		-- Follow-up: If pressed again right as Garuda comes back, the user will punch their shikigami forwards again, causing any target hit to ragdoll...
-		-- TODO special variant: While Garuda is coming back, the user can press the special anytime to release all stored mass through a powerful kick that sends the...
-		[ 1 ] = K.Projectile{ "Garuda Rebound", cooldown = 14, damage = 5, type = "bullet", block = "all", bypassRagdoll = true, color = "blue", tip = "USE TWICE", again = K.Projectile{ "Garuda Rebound", damage = 7, type = "bullet", block = "pre", bypassRagdoll = true, ragdoll = { h = -20, v = 16 }, color = "blue" } },
-		-- Amplifying their legs with cursed energy, the user performs a sweep and follows it up by an upwards kick that propels the target up and away.
-		-- TODO special variant: Anytime before the second kick, the user can press the special tto make way for a third one, directed to the opponent's head and...
-		-- TODO special variant: Adding a second press of the special before the third kick will change it to knock the opponent backwards rather than to the right,...
-		[ 2 ] = K.Melee{ "Rising Rage", cooldown = 15, damage = 14, hits = 2, type = "melee", ragdoll = { h = 8, v = 60 }, tip = "SPECIAL" },
-		-- The user charges their fist with cursed energy then lunges forwards to land a bone-breaking blow.
-		-- TODO special variant: By pressing the special during the windup, the user will jolt around with their charged Mass Breaker to end their lunge with an...
-		[ 3 ] = K.Melee{ "Mass Breaker", cooldown = 15, damage = 15, type = "melee", block = "none", trueRag = true, lunge = 15, tip = "SPECIAL" },
-		-- By holding Garuda as a cursed tool, the user stabs forward with the shikigami's body in an attempt to puncture the opponent.
-		-- TODO special variant: After pressing the special during the windup, the user will throw their shikigami forward to grab an enemy with it and pull them in, as...
-		[ 4 ] = K.Melee{ "Garuda Stab", cooldown = 14, damage = 14, hits = 2, type = "melee", block = "none", tip = "SPECIAL" },
+		-- Kicks Garuda forward as a ball (slight auto-aim) hitting the torso, then it hovers back.
+		-- Follow-up: pressed again as it returns, punched forward again, ragdolling toward the user (7, perfect-blockable).
+		-- TODO special variant: all stored mass kicks it back at excessive speed, ricocheting (24).
+		[ 1 ] = K.Projectile{ "Garuda Rebound", cooldown = 14, startup = 0.3, damage = 5, range = 50, speed = 160, radius = 3, type = "bullet",
+			block = "all", bypassRagdoll = true, color = "gold", tip = "USE TWICE",
+			again = K.Projectile{ "Garuda Rebound: Punch", window = 1.2, startup = 0.15, damage = 7, range = 50, speed = 180, radius = 3, type = "bullet",
+				block = "pre", bypassRagdoll = true, ragdoll = { h = -30, v = 15 }, color = "gold" } },
+		-- A sweep then an upward kick propelling the target up and away (7 each).
+		-- TODO special variants (30% mass each): a concussive head kick, then a knee kick ejecting them (16 / 24).
+		[ 2 ] = K.Melee{ "Rising Rage", cooldown = 15, startup = 0.3, damage = 14, hits = 2, interval = 0.35, type = "melee", ragdoll = { h = 40, v = 45 } },
+		-- Charges the fist and lunges into a bone-breaking blow (360 aim while airborne).
+		-- TODO special variant (30% mass): ends in a ground smash launching everyone around (12).
+		[ 3 ] = K.Melee{ "Mass Breaker", cooldown = 15, startup = 0.5, damage = 15, lunge = 18, type = "melee", block = "none", trueRag = true,
+			ragdoll = { h = 70, v = 20 } },
+		-- Stabs forward with Garuda's body (7) then a crushing axe kick knocking the target away (7).
+		-- TODO special variant (50% mass): Garuda grabs and pulls the enemy in, then whips them twice (21).
+		[ 4 ] = K.Melee{ "Garuda Stab", cooldown = 14, startup = 0.35, damage = 14, hits = 2, interval = 0.4, reach = 11, type = "melee", block = "none",
+			ragdoll = { h = 50, v = 10 } },
 	},
-	-- When held, the user will convert their cursed energy into virtual mass to fill up a "Mass" bar to their right.
-	special = K.Buff{ "Mass Buildup", cooldown = 16 },
+	-- Held: converts cursed energy into virtual mass (up to 21% of the awakening bar).
+	special = K.Buff{ "Mass Buildup", cooldown = 16, startup = 0.1, duration = 0.9, moveMult = 0.3, color = "gold",
+		onUse = function( ply ) ply:SetJRes1( 1 ) end },
 
-	-- Base-only: the awakening is a single move
-	-- The constant addition of virtual mass does not affect the user, but only up to a certain point.
-	awakenMove = K.Melee{ "Unrestricted Density", damage = 500, type = "melee", block = "none", bypassRagdoll = true },
+	-- The real one triggers after death: the user latches onto a target and raises their virtual mass beyond the limit,
+	-- turning into a black hole (500/s, falling off with distance). Placeholder: a massive pull-in blast.
+	awakenMove = K.AoE{ "Unrestricted Density", startup = 2.5, damage = 120, hits = 4, interval = 0.3, radius = 30, type = "domain", block = "none",
+		bypassRagdoll = true, trueRag = true, uninterruptible = true, crater = 3000, ragdoll = { h = -40, v = 20 }, color = "black" },
 } )

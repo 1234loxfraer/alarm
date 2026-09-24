@@ -1,5 +1,5 @@
--- Sky Assassin. Generated from the JJS wiki; every move is a JJS.Kit placeholder.
--- Comments summarise what the real move does (see the wiki page for details).
+-- Sky Assassin (early access). Moves are JJS.Kit placeholders built from the wiki numbers;
+-- comments describe what the real move does. Slot 3 and the special are still TBA in the game.
 
 local K = JJS.Kit
 
@@ -11,24 +11,28 @@ K.Character( "skyassassin", {
 	color = Color( 170, 220, 255 ),
 
 	passives = {
-		{ "Sky Manipulation", "Due to the user’s cursed technique, instead of walking they hover above the ground at all times." },
-		{ "Temper", "With every hit they land, the user gets angrier and angrier with their opponent." },
+		{ "Sky Manipulation", "Hovers instead of walking; stronger uppercuts and midair M1 combos. (TODO)" },
+		{ "Temper", "Landing hits builds a Temper bar; full, the user is bad-tempered for 15s (stronger moves). (TODO)" },
 	},
 
 	abilities = {
-		-- The user winds up a quick grab by surging forwards with their cursed technique.
-		-- TODO variant: While "bad-tempered", the user will first throw two blockable swings amplified by their cursed technique before following up with their...
-		[ 1 ] = K.Grab{ "Blind Rage", cooldown = 15, damage = 5, hits = 3, type = "melee", block = "none", bypassRagdoll = true },
-		-- The user spins while holding onto the atmosphere in front of them, using its surface to launch any enemy they walk into.
-		-- TODO variant: While "bad-tempered", the user will increase their output, improving the distortion at close range before sending a bullet-type...
-		[ 2 ] = K.Melee{ "Sky Distortion", cooldown = 12, damage = 12, type = "melee" },
+		-- Surges forward to grab (5), chokes the target and flies 125 studs with them, crashing into surfaces (+3 each, up to +9),
+		-- then tosses them (5). TODO bad-tempered variant: two swings first.
+		[ 1 ] = K.Grab{ "Blind Rage", cooldown = 15, startup = 0.3, damage = 13, hits = 3, interval = 0.5, lunge = 20, type = "melee", block = "none",
+			bypassRagdoll = true, ragdoll = { h = 60, v = 30 } },
+		-- Spins holding onto the atmosphere, launching anyone walked into; airborne it dashes 20 studs.
+		-- TODO bad-tempered variant: a 150 stud bullet distortion after the spin (17 total).
+		[ 2 ] = K.Melee{ "Sky Distortion", cooldown = 12, startup = 0.35, damage = 12, reach = 8, width = 9, type = "melee",
+			ragdoll = { h = 10, v = 55 }, air = { lunge = 20 } },
 		[ 3 ] = K.Stub{ "TBA" },
-		-- The user quickly puts both their hands forwards to strike the surface layer of the sky and shatter it like thin ice, striking opponents with a focused shockwave.
-		[ 4 ] = K.Grab{ "Thin Ice Breaker", cooldown = 15, damage = 10, hits = 2, type = "melee", block = "none", bypassRagdoll = true, ragdoll = true },
+		-- Both hands strike the sky's surface layer, shattering it like thin ice into a focused shockwave (5 + 5).
+		[ 4 ] = K.Melee{ "Thin Ice Breaker", cooldown = 15, startup = 0.4, damage = 10, hits = 2, interval = 0.25, reach = 10, type = "melee",
+			block = "none", bypassRagdoll = true, ragdoll = { h = 60, v = 25 }, color = "cyan" },
 	},
 	special = K.Stub{ "TBA" },
 
-	-- Base-only: the awakening is a single move
-	-- This awakening can only be used while "bad-tempered" and will end the state immediately.
-	awakenMove = K.Summon{ "Temper", damage = 80, heal = 25, type = "swarm", block = "none", bypassRagdoll = true, trueRag = true, uninterruptible = true, range = 50, color = "shadow" },
+	-- Base-only awakening. The real one needs the bad-tempered state: flies up, charges a giant distortion and
+	-- strikes it into a shockwave that eradicates everything within 50 studs (80, heals 25).
+	awakenMove = K.AoE{ "Temper", startup = 2, damage = 80, radius = 50, type = "swarm", block = "none", bypassRagdoll = true, trueRag = true,
+		uninterruptible = true, iframes = 2, heal = 25, crater = 2500, ragdoll = { h = 60, v = 40 }, color = "cyan" },
 } )

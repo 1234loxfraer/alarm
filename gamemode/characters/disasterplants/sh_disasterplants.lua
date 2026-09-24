@@ -1,5 +1,5 @@
--- Disaster Plants. Generated from the JJS wiki; every move is a JJS.Kit placeholder.
--- Comments summarise what the real move does (see the wiki page for details).
+-- Disaster Plants (Hanami). Moves are JJS.Kit placeholders built from the wiki numbers;
+-- comments describe what the real move does.
 
 local K = JJS.Kit
 
@@ -7,55 +7,64 @@ K.Character( "disasterplants", {
 	name = "Disaster Plants",
 	category = "complete",
 	hp = 100,
+	scale = 1.25,
 	model = K.Model( "disasterplants", "models/player/charple.mdl" ),
 	color = Color( 120, 220, 90 ),
 
+	-- Arm Wrap: the string is a single 4 damage hit (extra range on uppercuts and downslams)
+	m1 = { Count = 1, Damage = { 4 } },
+
 	passives = {
-		{ "Arm Wrap", "As the user stands 1.25 times taller than others, their left arm is wrapped in white clothing which forces them to solely rely on their right one to attack." },
-		{ "Lasso", "When initiating a front dash, the user will place their hand on the ground to manifest a long root that will sweep in and grab a target from 50 studs away or less, pulling them and setting them..." },
+		{ "Arm Wrap", "1.25x taller; the M1 string is a single 4 damage hit." },
+		{ "Lasso", "The front dash becomes a 50 stud root grab (4, 10s cooldown). (TODO)" },
 	},
 
 	abilities = {
-		-- The user activates their technique by plunging their arm in the ground to unleash a line of tree roots that will grow for 2 seconds in a straight line, reaching 50...
-		-- TODO variant: If the player is facing a gap or was jumping before using this move, the roots will become tangible to act as a bridge before...
-		-- TODO special variant: If the user was airborne or performing an action while the ground is marked with Plant Guidance, a small bundle of spikes will sprout...
-		[ 1 ] = K.Summon{ "Root Swarm", cooldown = 15, damage = 10, type = "swarm", block = "none", bypassRagdoll = true, range = 50, ragdoll = { h = 45, v = 18 }, color = "shadow", tip = "SPECIAL" },
-		-- The user conjures two wooden balls which will quickly protrude sharp branches to push any target in their 35 stud range back towards 3 deadly thorns rising from the...
-		-- TODO special variant: During an action or while in the air, using this move while the ground is marked with Plant Guidance causes a long sharp thorn to...
-		[ 2 ] = K.Projectile{ "Surging Thorns", cooldown = 16, damage = 15, type = "bullet", range = 35, ragdoll = { h = 45, v = 18 }, color = "blue", tip = "SPECIAL" },
-		-- The user chucks two cursed buds 70 studs forwards, which will push targets within 35 studs away and pull those at further range.
-		[ 3 ] = K.Projectile{ "Bud Shot", cooldown = 15, damage = 8, type = "bullet", bypassRagdoll = true, range = 70, color = "blue" },
-		-- The user reclines back then gains melee i-frames as they surge forwards and swing their arm violently, locking themselves in a short sequence where they deliver a...
-		-- Air variant: If Defense Response was used in the air, the user will instead motions for a spike to rise up from 25 studs away and launch anyone under...
-		-- TODO special variant "Flower Patch": During an action or while in the air, using this move while the ground is marked with Plant Guidance causes a bed of flowers to sudden...
-		[ 4 ] = K.Melee{ "Defense Response", cooldown = 15, damage = 12, type = "melee", block = "none", ragdoll = { h = 45, v = 18 }, tip = "SPECIAL", air = { damage = 15, hits = 2, bypassRagdoll = true, type = "swarm", ragdoll = { h = 8, v = 60 } } },
+		-- A line of roots grows 50 studs along the ground, lifting anyone in the way (10); from 25-50 studs they're knocked back to the user.
+		-- TODO variants: a root bridge over gaps; spikes at the Plant Guidance mark.
+		[ 1 ] = K.Beam{ "Root Swarm", cooldown = 15, startup = 0.5, damage = 10, range = 50, radius = 4, pierce = true, maxPitch = 0.05,
+			type = "swarm", block = "none", bypassRagdoll = true, color = "brown", ragdoll = { h = 30, v = 45 }, tip = "SPECIAL" },
+		-- Two wooden balls sprout branches pushing targets within 35 studs back onto 3 thorns that toss them further (5 each).
+		-- TODO special variant: a long thorn at the Plant Guidance mark (9, 12 on interruption).
+		[ 2 ] = K.Target{ "Surging Thorns", cooldown = 16, teleport = false, range = 35, cone = 0.8, startup = 0.4, damage = 15, hits = 3,
+			interval = 0.3, type = "bullet", color = "green", ragdoll = { h = 50, v = 30 }, tip = "SPECIAL" },
+		-- Chucks two cursed buds 70 studs (4 each); they latch on and drain cursed energy until the target uses a skill.
+		[ 3 ] = K.Projectile{ "Bud Shot", cooldown = 15, startup = 0.35, damage = 4, count = 2, volley = 0.15, spread = 6, range = 70, speed = 150,
+			radius = 2.5, type = "bullet", bypassRagdoll = true, color = "green" },
+		-- Reclines, then surges forward with melee i-frames into a heavy smack (evadable stun, doesn't cancel ragdoll).
+		-- Air variant: a spike rises 25 studs away launching anyone above it (8 + 7). TODO special variant "Flower Patch".
+		[ 4 ] = K.Melee{ "Defense Response", cooldown = 15, startup = 0.45, damage = 12, lunge = 12, type = "melee", block = "none", armor = "melee",
+			ragdoll = { h = 45, v = 15 },
+			air = { kind = "aoe", damage = 15, radius = 8, offset = 25, up = -10, type = "swarm", bypassRagdoll = true, ragdoll = { h = 5, v = 60 },
+				color = "brown" } },
 	},
-	-- By aiming the special anywhere within 65 studs, the user can mark the ground to set up for a special attack, with a constant glowing circle indicating the marked zone...
-	special = K.Buff{ "Plant Guidance", cooldown = 0.5, uninterruptible = true },
+	-- Marks the ground within 65 studs for special follow-ups of Root Swarm, Surging Thorns and Defense Response.
+	special = K.Buff{ "Plant Guidance", cooldown = 0.5, startup = 0.1, duration = 0.1, color = "green" },
 
 	awakening = {
 		name = "Unwrap",
 		duration = 60,
 		heal = 25,
-		-- The user grips the white cloth covering their arm while saying "It would seem that..." before ripping the wrap off, revealing their arm with a flower bud on the...
-		-- TODO passive "Unwrap": Now unrestricted, the user begins fighting again with both hands, able to perform 3 regular basic attacks before reaching their default M1.
+		-- "It would seem that... I should take you somewhat seriously." The wrap comes off and five spikes rise behind them.
+		-- TODO passive "Unwrap": the normal 4 hit M1 string (3 + 3 + 4 + 4); front dash becomes Defense Response's smack.
 		abilities = {
-			-- This time taking their opponent seriously, the user kneels to the floor and creates a line of tangible roots that will stretch for 7 seconds towards any direction the...
-			-- TODO special variant: If the user was empowered, they will gain the ability to steer another root on top of the one they were already controlling.
-			-- Air variant "Thorn Rampage": If the user was airborne, the line of roots will appear beneath them to carry them in the air, before dissipating as the user creates a...
-			[ 1 ] = K.Projectile{ "Root Rampage", cooldown = 16, damage = 5, type = "bullet", block = "pre", bypassRagdoll = true, range = 385, color = "blue", tip = "SPECIAL", air = { damage = 25, block = "none", range = 50 } },
-			-- The user raises their hand as they aim for an area in front of them to spread a 20x20 stud field of blooming flowers on.
-			-- TODO special variant: If the user was empowered, they will conjure a living spike with a gaping mouth and lingering roots.
-			[ 2 ] = K.Summon{ "Flower Field", cooldown = 16, damage = 6, type = "swarm", block = "none", bypassRagdoll = true, range = 20, ragdoll = { h = 8, v = 60 }, color = "shadow", tip = "SPECIAL" },
-			-- The user performs a handsign by raising their hands in the air to summon a massive flower in front of them, ragdolling away all nearby opponents as it prepares to...
-			-- TODO special variant: If the user was empowered, then their cursed energy will increase the size of the flower turret, consequently doubling the amount of...
-			[ 3 ] = K.Summon{ "Cursed Buds", cooldown = 16, damage = 33.5, type = "bullet", blockDamage = 16.75, bypassRagdoll = true, ragdoll = { h = 45, v = 18 }, color = "blue", tip = "SPECIAL" },
-			-- The user casts their domain expansion while kneeling on the ground to sap energy from nearby foliage.
-			[ 4 ] = K.Domain{ "Shining Sea of Growing Branches", cooldown = 120, duration = 15, sureHit = "damage", dps = 3, color = "white" },
+			-- A steerable line of tangible roots for 7s crashing into anyone in its path (5 per hit). Perfect-blockable.
+			-- TODO: steering, extra roots when empowered. Air variant "Thorn Rampage" (25).
+			[ 1 ] = K.Beam{ "Root Rampage", cooldown = 16, startup = 0.6, damage = 25, duration = 2, tick = 0.4, range = 60, radius = 4, pierce = true,
+				maxPitch = 0.3, type = "bullet", block = "pre", bypassRagdoll = true, color = "brown", ragdoll = { h = 40, v = 25 } },
+			-- A 20x20 stud field of flowers: anyone acting inside (other than blocking or dashing) is interrupted (6).
+			[ 2 ] = K.Zone{ "Flower Field", cooldown = 16, startup = 0.5, radius = 10, offset = 20, duration = 6, tick = 0.5, damage = 1.5, stun = 0.4,
+				type = "swarm", block = "none", bypassRagdoll = true, color = "pink" },
+			-- A massive flower ragdolls nearby opponents (8) then shoots 15 cursed buds like a turret (1.7 each).
+			[ 3 ] = K.Projectile{ "Cursed Buds", cooldown = 16, startup = 0.8, damage = 2.2, count = 15, volley = 0.1, spread = 3, range = 90, speed = 170,
+				radius = 2.5, type = "bullet", blockDamage = 1.1, bypassRagdoll = true, color = "green" },
+			-- Domain Expansion: any action other than running, side dashing or blocking is interrupted and punished (4) with "daze".
+			[ 4 ] = K.Domain{ "Shining Sea of Growing Branches", cooldown = 120, duration = 15, sureHit = "damage", dps = 3, color = "green" },
 		},
-		-- The user draws their own cursed energy to store it in their flower arm, going into a empowered state indicated through a flowing golden aura enveloping them.
-		-- TODO special variant "Flower Beam": If the user reactivates their special while empowered, they will lean forwards and aim the eye of their flower to shoot a devastating...
-		-- TODO special variant "Flower Beam": After Shining Sea of Growing Branches is expanded, Flower Beam will immediately go off cooldown due to the immense boost of cursed...
-		special = K.Buff{ "Energy Absorb", cooldown = 12, tip = "SPECIAL" },
+		-- Stores cursed energy in the flower arm (empowered: the next move is strengthened). Costs 5% awakening.
+		-- Follow-up "Flower Beam": pressed again while empowered, a devastating beam (35.6; 104 after the domain). Beam clash rank 2.
+		special = K.Buff{ "Energy Absorb", cooldown = 12, startup = 0.2, duration = 0.3, awakenCost = 0.05, color = "gold", tip = "USE AGAIN",
+			again = K.Beam{ "Flower Beam", window = 10, startup = 1, damage = 35.6, duration = 1, tick = 0.25, range = 120, radius = 6, pierce = true,
+				clash = 2, type = "explosion", block = "none", bypassRagdoll = true, color = "gold", ragdoll = { h = 60, v = 25 } } },
 	},
 } )

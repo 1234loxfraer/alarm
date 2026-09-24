@@ -47,11 +47,21 @@ function JJS.Heal( ply, amount )
 	ply:SetHealth( math.ceil( hp ) )
 end
 
+-- Damage multipliers from marks, debuffs... All registered modifiers stack multiplicatively.
+-- fn( victim, attacker, dmg, hit ) -> multiplier or nil
+JJS.DamageMods = JJS.DamageMods or {}
+function JJS.AddDamageMod( name, fn )
+	JJS.DamageMods[ name ] = fn
+end
+
 function JJS.ApplyDamage( victim, attacker, dmg, hit )
 	if dmg <= 0 or not victim:Alive() then return end
 	local now = CurTime()
 	hit = hit or {}
 
+	for _, fn in pairs( JJS.DamageMods ) do
+		dmg = dmg * ( fn( victim, attacker, dmg, hit ) or 1 )
+	end
 	dmg = hook.Run( "JJS_ScaleDamage", victim, attacker, dmg, hit ) or dmg
 	if dmg <= 0 then return end
 
@@ -111,6 +121,10 @@ function JJS.Hit( victim, hit )
 
 	if victim:GetJRagdolled() and not hit.bypassRagdoll then return "ignored" end
 	if JJS.HasIFrames( victim ) and not hit.ignoreIFrames then return "dodged" end
+
+	-- shields and similar effects can negate a hit (return a result string)
+	local pre = hook.Run( "JJS_PreHit", victim, hit )
+	if pre then return pre end
 
 	local act = JJS.GetAction( victim )
 	if act and act.counter and IsValid( attacker ) and attacker ~= victim then

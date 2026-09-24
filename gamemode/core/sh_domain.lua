@@ -184,6 +184,7 @@ if SERVER then
 		local now = CurTime()
 		for _, d in ipairs( list ) do
 			d:SetClashEnd( now + cfg.ClashTime )
+			d:SetEndTime( d:GetEndTime() + cfg.ClashTime ) -- domains don't run out while clashing
 			d.jjs_clash = list
 			local c = d:GetCaster()
 			if IsValid( c ) then c:SetNW2Float( "JJSDomClash", 0 ) end

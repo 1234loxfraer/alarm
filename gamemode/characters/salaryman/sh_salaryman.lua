@@ -1,7 +1,19 @@
--- Salaryman. Generated from the JJS wiki; every move is a JJS.Kit placeholder.
--- Comments summarise what the real move does (see the wiki page for details).
+-- Salaryman (Kento Nanami). Moves are JJS.Kit placeholders built from the wiki numbers;
+-- comments describe what the real move does.
+-- Ratio Point marks a target for 8s; marked targets take 1.5x damage from the user's moves
+-- (placeholder for the per-move Ratio enhancements).
 
 local K = JJS.Kit
+
+local function Marked( victim ) return ( victim.jjs_ratio or 0 ) > CurTime() end
+
+-- Aiming at a target within 70 studs, marks them with a 7:3 ratio bar (a QTE finds the weak point).
+-- TODO: the quick-time event; in Overtime there's no cooldown and several targets can be marked.
+local RATIO = K.Target{ "Ratio Point", cooldown = 5, teleport = false, range = 70, noHit = true, startup = 0.15, endlag = 0.1, color = "gold",
+	onEnd = function( ply )
+		local t = ply:GetJActTarget()
+		if IsValid( t ) then t.jjs_ratio = CurTime() + 8 end
+	end }
 
 K.Character( "salaryman", {
 	name = "Salaryman",
@@ -11,53 +23,67 @@ K.Character( "salaryman", {
 	color = Color( 240, 200, 120 ),
 
 	passives = {
-		{ "Blunt Cleaver", "The user wields a cleaver with a blade wrapped in white black-dotted cloth, while also wearing a yellow tie with black dots." },
-		{ "Ratio Black Flash", "Landing the final neutral M1 or an uppercut on a marked enemy will enhance it with a precise Black Flash, increasing its damage and knockback." },
+		{ "Blunt Cleaver", "Cosmetic: a cloth-wrapped cleaver and a dotted tie." },
+		{ "Ratio Black Flash", "Uppercuts and final neutral M1s on a Ratio-marked target deal double damage and knockback. (TODO)" },
 	},
 
 	abilities = {
-		-- The user charges 25 studs forwards while spinning while gaining melee i-frames, finishing the charge with a downwards slash across the opponent, knocking them away.
-		-- TODO special variant: The swing will get enhanced on a Ratio-marked target, dealing more damage and gaining the ability to lower their block angle for 7...
-		[ 1 ] = K.Melee{ "Cleaving Whirlwind", cooldown = 16, damage = 12, type = "melee", tip = "SPECIAL" },
-		-- The user extends their right foot to kick forwards, following up with cursed energy on contact with a target to push them away with evadable stun (or ragdoll).
-		-- TODO direction: backward variant "Reverse Kick": By walking backwards before using the move, the user will instead swing their left leg in the opposite direction to hit enemies behind...
-		-- TODO variant "Reverse Kick": When using Reverse Kick, interrupting any opponent's action except blocking will stun the target in place.
-		[ 2 ] = K.Melee{ "Severance Kick", cooldown = 14, damage = 12, type = "melee", blockDamage = 6, ragdoll = { h = 45, v = 18 }, tip = "DIRECTION" },
-		-- The user charges up a quick swing before flash-stepping 34 studs forwards and swinging their tool in the blink of an eye.
-		-- TODO special variant: The user's attack will get enhanced on a Ratio-marked target, dealing more damage and gaining the ability to disable the target's dashes...
-		-- Air variant "Cross Cut": If the user was instead airborne while using this move, they will perform a downwards dive with their weapon while momentarily gaining...
-		-- TODO air special variant "Cross Cut": The user's dive will get enhanced on a Ratio-marked target, dealing more damage and gaining the ability to disable the target's dashes...
-		-- TODO air special variant "Cross Cut": If the enemy was Ratio-marked by after the dive hits, then the slash will get enhanced instead, dealing more damage, ragdolling the...
-		[ 3 ] = K.Melee{ "Blunt Cut", cooldown = 16, damage = 9, type = "melee", bypassRagdoll = true, tip = "SPECIAL", air = { hits = 2, blockDamage = 4.5, trueRag = true, ragdoll = true } },
-		-- Pulling their arm back, the user thrusts their tool forwards to hit the opponent's stomach before twirling it.
-		-- TODO interruption/special variant: Interrupting an enemy or hitting a Ratio-marked target with this move will cause them to cough up blood, stunning the user and enemy...
-		[ 4 ] = K.Melee{ "Stabilize", cooldown = 12, damage = 6, type = "melee", bypassRagdoll = true, tip = "HIT" },
+		-- Charges 25 studs forward spinning with melee i-frames, ending in a downward slash that knocks away.
+		-- TODO special variant: on a Ratio-marked target (16) staggers their arm (lower block angle for 7s).
+		[ 1 ] = K.Melee{ "Cleaving Whirlwind", cooldown = 16, startup = 0.35, damage = 12, lunge = 25, type = "melee", armor = "melee",
+			ragdoll = { h = 55, v = 15 } },
+		-- Kicks forward and follows with cursed energy pushing the target away with evadable stun (through block).
+		-- TODO direction variant "Reverse Kick": walking backward, hits behind with unevadable stun.
+		[ 2 ] = K.Melee{ "Severance Kick", cooldown = 14, startup = 0.35, damage = 12, reach = 9, type = "melee", blockDamage = 6,
+			ragdoll = { h = 55, v = 12 }, tip = "DIRECTION" },
+		-- A quick swing then a 34 stud flash step and a strike in the blink of an eye.
+		-- Hold: 15 more studs and 14 damage. Air variant "Cross Cut": a dive (5) then an unblockable slice (4).
+		[ 3 ] = K.Melee{ "Blunt Cut", cooldown = 16, startup = 0.45, damage = 9, lunge = 34, type = "melee", bypassRagdoll = true,
+			ragdoll = { h = 40, v = 15 },
+			hold = { time = 0.8, damage = 14, lunge = 49 },
+			air = { damage = 9, hits = 2, interval = 0.3, block = "none", trueRag = true, lunge = 12, height = 18, ragdoll = { h = 10, v = -25 } } },
+		-- Thrusts the tool into the opponent's stomach; both are stunned briefly, the user can cancel into Cleaving Whirlwind or Blunt Cut.
+		-- TODO interruption/special variant: coughing up blood, longer stun (10 on interruption).
+		[ 4 ] = K.Melee{ "Stabilize", cooldown = 12, startup = 0.35, damage = 6, reach = 9, type = "melee", bypassRagdoll = true, stun = 1.5, tip = "HIT" },
 	},
-	-- When aiming at a target within 70 studs, the user is able to activate their Ratio technique and mark the target with a bar divided into tenths, starting a quick-time...
-	special = K.Mobility{ "Ratio Point", cooldown = 5, block = "none", bypassRagdoll = true, uninterruptible = true, travel = 70 },
+	special = RATIO,
 
 	awakening = {
 		name = "Overtime",
 		duration = 60,
 		heal = 25,
-		-- The user sighs, putting their cursed tool on their back and grabbing their tie and wrapping it tightly around their right fist as they state: "How unfortunate.
-		-- TODO cosmetic "Wall of Stone": When blocking, the user will hold back from using their cursed tool to defend themselves, remaining wide open.
-		-- TODO passive "Working Overtime": Due to their binding vow, the user is able to output more cursed energy into their blows.
-		-- TODO passive "Ratio Black Flash": Same as base, except the final M1 will be strengthened in general, and will even become unblockable.
+		-- "How unfortunate. I'm now working overtime." Output boosted to 110-120%.
+		-- TODO awakening variant: right after staggering with Stabilize, awakening rushes into a Black Flash (12, 16 with Ratio).
+		-- TODO passive "Working Overtime": M1s 4 + 4 + 5 + 5 with destruction; ratioed final M1s are unblockable.
 		abilities = {
-			-- To set the record of the most consecutive uses of Black Flash, this move progresses through four distinct stages before going on cooldown, each stage needing to hit a...
-			[ 1 ] = K.Melee{ "Ratio Breaker I", cooldown = 19, damage = 10, hits = 2, type = "melee", block = "none", trueRag = true, ragdoll = { h = 45, v = 18 } },
-			-- The user slides forwards by 45 studs while dragging their cursed tool on the ground to sharpen it, creating a heated trail from its tip before slicing upwards to...
-			-- Air variant "Erosion": If the user was airborne, they will float in the air for a second to prepare a overhead slam with their cleaver, grounding anyone...
-			-- TODO air variant "Erosion": While preparing their slam, a long Ratio bar will appear before the user, reminiscent of Ratio Point's bar but with a circle following...
-			[ 2 ] = K.AoE{ "Sharpen", cooldown = 20, damage = 15, type = "explosion", block = "none", bypassRagdoll = true, armor = "melee", radius = 45, color = "orange", air = {} },
-			-- The user holsters their tool then attempts to catch a target in front of them.
-			[ 3 ] = K.Melee{ "Interrogate", cooldown = 20, damage = 4, type = "melee", block = "none", bypassRagdoll = true, armor = "melee" },
-			-- The user, planning on using an extension of their cursed technique, instantly leaps into the air while winding up a heavy slam to mark the environment itself with a...
-			-- Follow-up: Pressing the move again, even during stun, will force the cursed debris to fall downwards and crush everything in the area.
-			[ 4 ] = K.AoE{ "Collapse", cooldown = 22, damage = 5, type = "explosion", block = "none", bypassRagdoll = true, armor = "melee", ragdoll = { h = 8, v = 60 }, color = "orange", tip = "USE AGAIN", again = K.AoE{ "Collapse", damage = 9, type = "explosion", block = "none", bypassRagdoll = true, trueRag = true, uninterruptible = true, color = "orange" } },
+			-- Four stages (each must hit a marked target to proceed): slash, Black Flash punch, hop slam, 60 stud swipe (35, x3 with Ratio).
+			-- TODO: stages II-IV.
+			[ 1 ] = K.Melee{ "Ratio Breaker", cooldown = 19, startup = 0.35, damage = 10, hits = 2, interval = 0.3, type = "melee", block = "none",
+				trueRag = true, ragdoll = { h = 40, v = 20 }, tip = "1/4" },
+			-- Slides 45 studs dragging the cleaver into a heated trail, then slices upward launching enemies (15, 23 with Ratio).
+			-- Air variant "Erosion": floats then slams, grounding anyone in front (15).
+			[ 2 ] = K.Melee{ "Sharpen", cooldown = 20, startup = 0.3, damage = 15, lunge = 45, type = "explosion", block = "none", bypassRagdoll = true,
+				armor = "melee", ragdoll = { h = 30, v = 50 },
+				air = { lunge = 5, ragdoll = { h = 5, v = -35 }, crater = 1000 } },
+			-- Holsters the tool and catches a target by the neck (4): "Where are your allies?" then a gut punch (10).
+			-- TODO: a pursuit and second lift (16).
+			[ 3 ] = K.Grab{ "Interrogate", cooldown = 20, startup = 0.35, damage = 14, hits = 2, interval = 0.8, type = "melee", block = "none",
+				bypassRagdoll = true, armor = "melee", ragdoll = { h = 65, v = 15 } },
+			-- Leaps and slams to mark the environment's weak point (5), debris rises (7, 15 with Ratio).
+			-- Follow-up: pressed again (within 8s), the debris crashes down on everything (+9 per debris, up to 40).
+			[ 4 ] = K.AoE{ "Collapse", cooldown = 22, startup = 0.5, damage = 12, hits = 2, interval = 0.3, radius = 15, type = "explosion", block = "none",
+				bypassRagdoll = true, armor = "melee", crater = 1400, ragdoll = { h = 10, v = 35 }, color = "brown", tip = "USE AGAIN",
+				again = K.AoE{ "Collapse: Debris", window = 8, startup = 0.3, damage = 27, radius = 20, type = "explosion", block = "none",
+					bypassRagdoll = true, trueRag = true, uninterruptible = true, crater = 1600, ragdoll = { h = 10, v = -30 }, color = "brown" } },
 		},
-		-- Same as base, but has no cooldown and can be used to mark more than one target.
-		special = K.Buff{ "Ratio Point", block = "none", bypassRagdoll = true, uninterruptible = true },
+		special = RATIO,
 	},
 } )
+
+if SERVER then
+	JJS.AddDamageMod( "ratio", function( victim, attacker, dmg, hit )
+		if IsValid( attacker ) and attacker:IsPlayer() and attacker:GetJChar() == "salaryman" and hit.kit and Marked( victim ) then
+			return 1.5
+		end
+	end )
+end
