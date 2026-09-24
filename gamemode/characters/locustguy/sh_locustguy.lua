@@ -10,6 +10,11 @@ K.Character( "locustguy", {
 	model = K.Model( "locustguy", "models/player/zombie_fast.mdl" ),
 	color = Color( 150, 190, 60 ),
 
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = {
+		Frames = { { 14, 5, 11 }, { 14, 5, 11 }, { 14, 5, 11 } },
+	},
+
 	passives = {
 		{ "Naturally Selected", "Cosmetic: an extra pair of arms, antennas and wings." },
 	},

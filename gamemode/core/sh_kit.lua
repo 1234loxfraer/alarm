@@ -7,13 +7,22 @@
 -- Common fields:
 --   [1] name, tip, cooldown, startup, endlag, moveMult, noJump
 --   damage (total), hits, interval, type ("melee", "bullet", "explosion", "swarm", "domain", "special")
---   block ("normal", "all" = 360, "pre" = perfect block only, "none"), blockDamage, blockedEndlag
+--   block ("normal", "all" = 360, "pre" = perfect block only, "none"), blockDamage
+--   endlag (after the last hit when it lands), whiffEndlag (when nothing was hit), blockEndlag (when blocked)
+--   Frame data from dogslamloop.com is in 60 fps frames: seconds = frames / 60 (K.F(frames))
 --   stun, ragdoll (true or { time, h, v } in studs/s; h < 0 pulls toward the user), trueRag (no evasive)
 --   bypassRagdoll, armor ("melee", "bullet", "total"), uninterruptible, iframes (during the move)
 --   heal, selfDamage, color (JJS.Kit.PALETTE key), crater (destruction scale on impact)
 --   onHit(ply, victim, p) when the final hit lands
 --   awakenCost (fraction of the awakening bar spent), noCooldown, charges (uses per cooldown)
 --   slow = { mult, time } applied to targets hit, onEnd(ply, p) when the move finishes uninterrupted
+--   hitDamage = { per hit }, hitBlock = { per hit block rule }
+--   interrupt = { damage (bonus), stun, ragdoll } when the hit interrupts the target's action (HIT tip)
+--   Variants (tables of overrides, each becomes its own action):
+--     air (user airborne), airTarget (target airborne), ragdolled (target ragdolled), back (walking
+--     backward: DIRECTION), special (special pressed during the startup: SPECIAL; `free` = ignores the
+--     special's cooldown, `specialCooldown` = cooldown put on the special), miss (spec started when
+--     nothing was hit),
 --   air = { overrides } (used while airborne), hold = { time, overrides } (HOLD variant),
 --   again = spec with a `window` (USE AGAIN / USE TWICE follow-up), onUse(ply, p) when the move starts
 --
@@ -43,6 +52,9 @@ local U = JJS.Util
 
 JJS.Kit = JJS.Kit or {}
 local K = JJS.Kit
+
+-- Frames (60 fps) to seconds
+function K.F( frames ) return frames / 60 end
 
 K.PALETTE = {
 	white = Color( 255, 255, 255 ),
@@ -174,9 +186,9 @@ function K.MakeHit( ply, p, victim, idx, from )
 	local last = idx >= p.hits
 	local hit = {
 		attacker = ply,
-		damage = p.perHit or p.damage / p.hits,
+		damage = p.hitDamage and ( p.hitDamage[ idx ] or 0 ) or ( p.perHit or p.damage / p.hits ),
 		type = p.dmgType,
-		block = p.block,
+		block = p.hitBlock and p.hitBlock[ idx ] or p.block,
 		blockDamage = p.blockDamage and p.blockDamage / p.hits,
 		bypassRagdoll = p.bypassRagdoll,
 		ignoreIFrames = p.ignoreIFrames,
@@ -199,10 +211,25 @@ end
 
 -- Applies a hit and handles blocked endlag; returns the JJS.Hit result
 function K.Apply( ply, p, victim, idx, from )
-	local r = JJS.Hit( victim, K.MakeHit( ply, p, victim, idx, from ) )
-	if r == "blocked" and not ply.jjs_kitBlocked and JJS.IsBusy( ply ) then
+	local hit = K.MakeHit( ply, p, victim, idx, from )
+	-- interrupting the target's action (a move or a dash, not a block) upgrades the hit
+	local it = p.interrupt
+	if it and ( JJS.IsBusy( victim ) or JJS.IsDashing( victim ) ) and not JJS.IsBlocking( victim ) then
+		hit.damage = hit.damage + ( it.damage or 0 )
+		if it.stun then hit.stun = it.stun hit.ragdoll = nil end
+		if it.ragdoll then
+			local away = U.Flat( victim:GetPos() - ply:GetPos() )
+			hit.ragdoll = { time = it.ragdoll.time or 1, vel = away * ( it.ragdoll.h or 30 ) * S + Vector( 0, 0, ( it.ragdoll.v or 18 ) * S ), trueRag = it.trueRag }
+		end
+		hit.interrupted = true
+	end
+	local r = JJS.Hit( victim, hit )
+	local own = JJS.IsBusy( ply ) and JJS.GetAction( ply ).kitParams == p
+	if r == "blocked" and not ply.jjs_kitBlocked and own then
 		ply.jjs_kitBlocked = true
-		JJS.ExtendAction( ply, p.blockedEndlag or 0.3 )
+		JJS.ExtendAction( ply, p.blockEndlag and math.max( p.blockEndlag - p.endlag, 0 ) or 0.3 )
+	elseif r == "hit" or r == "killed" then
+		ply.jjs_kitLanded = true
 	end
 	if ( r == "hit" or r == "killed" ) and p.heal then JJS.Heal( ply, p.heal / p.hits ) end
 	if r == "hit" and p.slow then
@@ -287,6 +314,14 @@ local function HitEvents( p, fn )
 		evs[ #evs + 1 ] = { HitTime( p, i ), function( ply, t, var )
 			if CLIENT then return end
 			fn( ply, i, var )
+			-- a whiffed move has its own (usually longer) recovery
+			if i == p.hits and not ply.jjs_kitLanded and not ply.jjs_kitBlocked and JJS.IsBusy( ply ) then
+				if p.missAb then
+					p.missAb.Use( ply, nil, 0 )
+				elseif p.whiffEndlag then
+					JJS.ExtendAction( ply, math.max( p.whiffEndlag - p.endlag, 0 ) )
+				end
+			end
 		end }
 	end
 	return evs
@@ -304,6 +339,7 @@ local function Base( p )
 		gesture = p.gesture or "range_fists_r",
 		start = function( ply )
 			ply.jjs_kitBlocked = nil
+			ply.jjs_kitLanded = nil
 			if p.iframes then JJS.IFrames( ply, p.iframes ) end
 			if p.awakenCost and not ply:GetJAwakened() then ply:SetJAwaken( math.max( 0, ply:GetJAwaken() - p.awakenCost ) ) end
 			if SERVER and p.selfDamage then JJS.ApplyDamage( ply, nil, p.selfDamage, { type = JJS.DMG.SPECIAL } ) end
@@ -677,11 +713,15 @@ local function Start( ply, mv, slot, ab, move, skipCooldown )
 		target = K.AimTarget( ply, move.p.range, move.p.cone )
 		if not IsValid( target ) then return end
 		if move.p.teleport ~= false then
-			local dir = U.Flat( target:GetPos() - mv:GetOrigin() )
+			local dir = U.Flat( target:GetPos() - ( mv and mv:GetOrigin() or ply:GetPos() ) )
 			local pos = target:GetPos() - dir * 36
 			if U.HullFits( ply, pos ) then
-				mv:SetOrigin( pos )
-				mv:SetVelocity( vector_origin )
+				if mv then
+					mv:SetOrigin( pos )
+					mv:SetVelocity( vector_origin )
+				else
+					ply:SetPos( pos )
+				end
 			end
 		end
 	end
@@ -690,6 +730,39 @@ local function Start( ply, mv, slot, ab, move, skipCooldown )
 		ply.jjs_again = ply.jjs_again or {}
 		ply.jjs_again[ slot ] = { t = CurTime() + ( ab.spec.again.window or 1.5 ), ab = ab }
 	end
+end
+
+-- Nearest player in front of the user (ragdolled ones included)
+function K.FrontTarget( ply, p )
+	local yaw = ply:EyeAngles().y
+	local reach = math.max( p.reach or 0, 9 * S )
+	local center = U.BodyCenter( ply ) + U.YawForward( yaw ) * ( reach / 2 + 8 )
+	return U.PlayersInBox( center, yaw, Vector( reach, math.max( p.width or 0, 9 * S ), 12 * S ), { ignore = ply, ragdolled = true } )[ 1 ]
+end
+
+-- Chooses the variant for the current situation: direction, target state, then the user's
+function K.PickVariant( ply, mv, p, V, air, move )
+	if V.back and mv and mv:GetForwardSpeed() < 0 then return V.back end
+	if V.airTarget or V.ragdolled then
+		local t = p.kind == "target" and K.AimTarget( ply, p.range, p.cone ) or K.FrontTarget( ply, p )
+		if IsValid( t ) then
+			if V.ragdolled and t:GetJRagdolled() then return V.ragdolled end
+			if V.airTarget and not t:IsOnGround() and not t:GetJRagdolled() then return V.airTarget end
+		end
+	end
+	if air and not ply:IsOnGround() then return air end
+	return move
+end
+
+-- Special pressed during a move's startup: that move's SPECIAL variant (returns true when used)
+function K.TrySpecialVariant( ply, mv )
+	local act = JJS.GetAction( ply )
+	local sv = act and act.kitSpecial
+	if not sv or JJS.ActionTime( ply ) >= act.kitParams.startup then return false end
+	if not sv.free and JJS.GetCooldown( ply, 5 ) > CurTime() then return false end
+	if not ply:Alive() or ply:GetJRagdolled() or JJS.IsStunned( ply ) then return false end
+	sv.trigger( ply, mv )
+	return true
 end
 
 function Build( id, key, spec )
@@ -714,7 +787,8 @@ function Build( id, key, spec )
 		ab.CanUse = function( ply )
 			local act = JJS.GetAction( ply )
 			if not act or not ply:Alive() or ply:GetJRagdolled() or JJS.IsStunned( ply ) then return false end
-			local startup = act.kitParams and act.kitParams.startup or ( act.name == "m1" and JJS.GetChar( ply ).m1.Startup )
+			local startup = act.kitParams and act.kitParams.startup
+				or ( act.name == "m1" and ( JJS.M1.Timing( JJS.GetChar( ply ).m1, JJS.M1.Unpack( ply:GetJActVar() ) ) ) )
 			return startup and JJS.ActionTime( ply ) < startup or false
 		end
 		ab.Use = function( ply, mv, slot )
@@ -765,6 +839,36 @@ function Build( id, key, spec )
 		ab.again = Build( id, key .. ".again", sub )
 	end
 
+	-- conditional variants
+	local V = {}
+	for _, vk in ipairs( { "airTarget", "ragdolled", "back", "special" } ) do
+		if spec[ vk ] then
+			V[ vk ] = { p = Params( spec, spec[ vk ] ) }
+			V[ vk ].action = Register( name .. "." .. vk, V[ vk ].p )
+		end
+	end
+	if spec.miss then
+		local missAb = Build( id, key .. ".miss", spec.miss )
+		for _, m in ipairs( { move, air, hold, V.airTarget, V.ragdolled, V.back } ) do
+			if m then m.p.missAb = missAb end
+		end
+	end
+	ab.variants = V
+
+	-- special pressed during the startup switches to the special variant
+	if V.special then
+		local sv = spec.special
+		local function Trigger( ply, mv )
+			local slot = ply:GetJActVar()
+			JJS.StopAction( ply, true )
+			if sv.specialCooldown then JJS.SetCooldown( ply, 5, sv.specialCooldown ) end
+			Start( ply, mv, slot, ab, V.special, true )
+		end
+		for _, m in ipairs( { move, air, hold, V.airTarget, V.ragdolled, V.back } ) do
+			if m then JJS.Actions[ m.action ].kitSpecial = { trigger = Trigger, free = sv.free } end
+		end
+	end
+
 	if spec.hold then
 		local need = spec.hold.time or 1
 		JJS.RegisterAction( name .. ".charge", {
@@ -794,8 +898,7 @@ function Build( id, key, spec )
 			JJS.StartAction( ply, name .. ".charge", slot )
 			return
 		end
-		local m = ( air and not ply:IsOnGround() ) and air or move
-		Start( ply, mv, slot, ab, m )
+		Start( ply, mv, slot, ab, K.PickVariant( ply, mv, p, V, air, move ) )
 	end
 
 	if ab.again then

@@ -22,6 +22,11 @@ K.Character( "salaryman", {
 	model = K.Model( "salaryman", "models/player/breen.mdl" ),
 	color = Color( 240, 200, 120 ),
 
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = {
+		Frames = { { 14, 5, 11 }, { 14, 6, 13 }, { 14, 6, 13 } },
+	},
+
 	passives = {
 		{ "Blunt Cleaver", "Cosmetic: a cloth-wrapped cleaver and a dotted tie." },
 		{ "Ratio Black Flash", "Uppercuts and final neutral M1s on a Ratio-marked target deal double damage and knockback. (TODO)" },

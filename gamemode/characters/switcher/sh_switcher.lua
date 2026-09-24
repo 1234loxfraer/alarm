@@ -32,6 +32,11 @@ K.Character( "switcher", {
 	model = K.Model( "switcher", "models/player/odessa.mdl" ),
 	color = Color( 255, 170, 60 ),
 
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = {
+		Frames = { { 14, 5, 11 }, { 14, 5, 11 }, { 14, 5, 11 } },
+	},
+
 	abilities = {
 		-- Spins twice into a powerful kick (9, can't kill) forcing the target up in stun, then grabs and tosses them (1 + 5).
 		-- TODO variant "Slide Kick": during Blazing Star or a roll.

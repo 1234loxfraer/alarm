@@ -12,6 +12,8 @@ K.Character( "crowcharmer", {
 
 	-- Fly High: uppercuts send targets nearly twice as high
 	m1 = {
+		-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+		Frames = { { 14, 5, 11 }, { 14, 5, 11 }, { 14, 5, 11 } },
 		Final = {
 			[ 0 ] = { h = 50 * JJS.STUD, v = 24 * JJS.STUD, ragdoll = 0.8 },
 			[ 1 ] = { h = 8 * JJS.STUD, v = 130 * JJS.STUD, ragdoll = 0.8 },

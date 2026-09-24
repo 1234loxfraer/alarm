@@ -37,6 +37,8 @@ local TC = {
 	},
 
 	m1 = {
+		-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+		Frames = { { 12, 8, 17 }, { 11, 9, 19 } },
 		Count = 3,
 		Damage = { 3, 3, 4 },
 		RayDamage = 8,

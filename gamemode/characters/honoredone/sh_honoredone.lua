@@ -10,6 +10,11 @@ K.Character( "honoredone", {
 	model = K.Model( "honoredone", "models/player/group01/male_09.mdl" ),
 	color = Color( 110, 190, 255 ),
 
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = {
+		Frames = { { 14, 5, 11 }, { 12, 8, 17 }, { 12, 8, 17 } },
+	},
+
 	passives = {
 		{ "Infinity", "Cosmetic: the user poses and hovers instead of guarding when blocking." },
 	},

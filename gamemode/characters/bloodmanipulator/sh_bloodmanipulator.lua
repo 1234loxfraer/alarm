@@ -23,6 +23,11 @@ local BM = K.Character( "bloodmanipulator", {
 	model = K.Model( "bloodmanipulator", "models/player/group03/male_04.mdl" ),
 	color = Color( 200, 30, 50 ),
 
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = {
+		Frames = { { 12, 7, 15 }, { 12, 8, 17 }, { 12, 8, 17 } },
+	},
+
 	abilities = {
 		-- Claps to trap blood and fires it as an uncounterable thin beam with 30 studs of range.
 		-- Hold (with an orb): after 1.35s the beam doubles its range and knockback (20, unblockable).

@@ -18,6 +18,12 @@ K.Character( "defenseattorney", {
 	model = K.Model( "defenseattorney", "models/player/magnusson.mdl" ),
 	color = Color( 230, 210, 120 ),
 
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = {
+		Damage = { 2, 4, 4, 4 }, -- Judge Gavel: 2 + (2 + 2) + 4 + 4
+		Frames = { { 14, 5, 11 }, { 14, 6, 13 }, { 19, 6, 13 } },
+	},
+
 	passives = {
 		{ "Judge Gavel", "The 2nd M1 hits twice (2 + (2 + 2) + 4 + 4); block breaks set the string to it. (TODO)" },
 	},

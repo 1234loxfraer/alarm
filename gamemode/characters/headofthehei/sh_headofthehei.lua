@@ -11,7 +11,8 @@ K.Character( "headofthehei", {
 	color = Color( 240, 240, 180 ),
 
 	-- Projectionism: 2 damage per M1, the final hit always knocks back with evadable stun
-	m1 = { Damage = { 2, 2, 2, 2 } },
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = { Frames = { { 12, 7, 15 }, { 11, 9, 19 }, { 11, 9, 19 } }, Damage = { 2, 2, 2, 2 } },
 
 	passives = {
 		{ "Projectionism", "M1s deal 2 each, no uppercuts/downslams, the front dash becomes a second side dash. (partly TODO)" },

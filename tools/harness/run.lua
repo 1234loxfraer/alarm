@@ -75,6 +75,38 @@ hook.Run( "Initialize" )
 
 local chars = {}
 for _, id in ipairs( JJS.CharacterOrder ) do chars[ #chars + 1 ] = id end
+
+-- DUMP=1: print every character's moves as tab separated rows and exit
+if os.getenv( "DUMP" ) then
+	local S = JJS.STUD
+	local function row( id, set, slot, ab )
+		if not ab then return end
+		if ab.spec and ab.spec.kind == "bymode" then
+			for i, sub in ipairs( ab.spec ) do
+				if istable( sub ) then row( id, set, slot .. "m" .. i, K_BUILT and nil or { name = sub[ 1 ], spec = sub, cooldown = sub.cooldown } ) end
+			end
+			return
+		end
+		local sp = ab.spec or {}
+		local rg = sp.ragdoll and "yes" or "no"
+		print( table.concat( { id, set, tostring( slot ), tostring( ab.name ), sp.kind or "?", tostring( ab.cooldown or "" ), tostring( sp.damage or "" ),
+			tostring( sp.block or "normal" ), rg, tostring( sp.bypassRagdoll and "bypass" or "" ), tostring( sp.range or "" ), tostring( sp.window or "" ), tostring( sp.startup or "" ),
+			tostring( sp.hits or "" ), sp.again and ( "again:" .. tostring( sp.again[ 1 ] ) ) or "" }, "\t" ) )
+	end
+	for _, id in ipairs( chars ) do
+		local c = JJS.Characters[ id ]
+		local function set( name, t )
+			if not t then return end
+			for slot = 1, 4 do row( id, name, slot, t.abilities and t.abilities[ slot ] ) end
+			row( id, name, "R", t.special )
+			if t.alt then set( name .. "-alt", t.alt ) end
+		end
+		set( "base", c )
+		set( "awk", c.awakening )
+		row( id, "awkmove", "G", c.awakenMove )
+	end
+	os.exit( 0 )
+end
 print( string.format( "%s realm: %d characters, %d actions", SERVER and "server" or "client", #chars, #JJS.ActionById ) )
 
 ------------------------------------------------------------------------------------------
@@ -177,6 +209,16 @@ if SERVER then
 
 	local KEYS = { JJS.AbilityKeys[ 1 ], JJS.AbilityKeys[ 2 ], JJS.AbilityKeys[ 3 ], JJS.AbilityKeys[ 4 ], JJS.IN.SPECIAL }
 
+	-- remember which actions A started (to see which variant ran)
+	local StartAction = JJS.StartAction
+	JJS.StartAction = function( ply, name, ... )
+		if ply == A and A.jjs_acts then
+			local short = string.match( name, "[^.]+%.[^.]+(.*)$" ) or name
+			A.jjs_acts[ #A.jjs_acts + 1 ] = short ~= "" and short or "base"
+		end
+		return StartAction( ply, name, ... )
+	end
+
 	local function Reset()
 		for _, p in ipairs( { A, B } ) do
 			if not p:Alive() then p:Spawn() end
@@ -201,9 +243,9 @@ if SERVER then
 		Run( 0.1 )
 	end
 
-	local function Press( key, hold, extra )
+	local function Press( key, hold, extra, fwd )
 		local n = math.max( 1, math.floor( ( hold or 0.03 ) / MOCK.tick ) )
-		for _ = 1, n do Tick( { [ A ] = { buttons = key | ( extra or 0 ) } } ) end
+		for _ = 1, n do Tick( { [ A ] = { buttons = key | ( extra or 0 ), fwd = fwd or 0 } } ) end
 	end
 
 	local report = {}
@@ -214,12 +256,16 @@ if SERVER then
 		local ab = JJS.GetAbility( A, slot )
 		if not ab then return end
 		local before = hits[ A ] or 0
+		A.jjs_acts = {}
 		if opts.air then A:SetPos( Vector( 0, 0, 150 ) ) A.onGround = false end
-		Press( KEYS[ slot ], opts.hold )
+		if opts.airTarget then B:SetPos( Vector( 70, 0, 120 ) ) B.onGround = false end
+		if opts.ragdolled then JJS.Ragdoll.Apply( B, { time = 3 } ) Run( 0.3 ) end
+		Press( KEYS[ slot ], opts.hold, nil, opts.back and -400 )
 		if opts.again then Run( 0.15 ) Press( KEYS[ slot ] ) end
+		if opts.special then Run( 0.05 ) Press( JJS.IN.SPECIAL ) end
 		Run( opts.time or 3 )
 		local n = ( hits[ A ] or 0 ) - before
-		report[ #report + 1 ] = string.format( "  %-10s %d %-34s hits=%d", label, slot, ab.name, n )
+		report[ #report + 1 ] = string.format( "  %-13s %d %-34s hits=%d %s", label, slot, ab.name, n, table.concat( A.jjs_acts or {}, "," ) )
 	end
 
 	for _, id in ipairs( chars ) do
@@ -234,6 +280,11 @@ if SERVER then
 			if ab and ab.spec and ab.spec.hold then TrySlot( "hold", slot, { hold = ( ab.spec.hold.time or 1 ) + 0.1 } ) end
 			if ab and ab.spec and ab.spec.air then TrySlot( "air", slot, { air = true } ) end
 			if ab and ab.again then TrySlot( "again", slot, { again = true } ) end
+			local V = ab and ab.variants or {}
+			if V.back then TrySlot( "back", slot, { back = true } ) end
+			if V.airTarget then TrySlot( "airTarget", slot, { airTarget = true } ) end
+			if V.ragdolled then TrySlot( "ragdolled", slot, { ragdolled = true } ) end
+			if V.special then TrySlot( "special", slot, { special = true } ) end
 		end
 		-- alternate set
 		local char = JJS.Characters[ id ]
@@ -266,6 +317,11 @@ if SERVER then
 				if ab and ab.spec and ab.spec.hold then TrySlot( "awk-hold", slot, { hold = ( ab.spec.hold.time or 1 ) + 0.1 } ) end
 				if ab and ab.spec and ab.spec.air then TrySlot( "awk-air", slot, { air = true } ) end
 				if ab and ab.again then TrySlot( "awk-again", slot, { again = true } ) end
+				local V = ab and ab.variants or {}
+				if V.back then TrySlot( "awk-back", slot, { back = true } ) end
+				if V.airTarget then TrySlot( "awk-airTarget", slot, { airTarget = true } ) end
+				if V.ragdolled then TrySlot( "awk-ragdolled", slot, { ragdolled = true } ) end
+				if V.special then TrySlot( "awk-special", slot, { special = true } ) end
 			end
 			if char.awakening and char.awakening.alt then
 				for slot = 1, 5 do TrySlot( "awk-alt", slot, { setup = function() A:SetJKitSet( 1 ) end } ) end

@@ -12,7 +12,8 @@ local LC = K.Character( "luckycoward", {
 	color = Color( 250, 230, 110 ),
 
 	-- Shoot!: the final M1 punctures (+1 damage)
-	m1 = { Damage = { 3, 3, 4, 5 } },
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = { Frames = { { 12, 7, 15 }, { 13, 6, 13 }, { 13, 6, 13 }, { 12, 0, 0 } }, Damage = { 3, 3, 4, 5 } },
 
 	passives = {
 		{ "Shoot!", "The final M1 deals 1 extra damage; front dashes bypass ragdoll. (partly TODO)" },

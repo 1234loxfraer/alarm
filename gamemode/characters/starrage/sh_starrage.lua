@@ -11,6 +11,11 @@ K.Character( "starrage", {
 	model = K.Model( "starrage", "models/player/mossman.mdl" ),
 	color = Color( 255, 200, 90 ),
 
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = {
+		Frames = { { 14, 5, 11 }, { 14, 5, 11 }, { 14, 5, 11 } },
+	},
+
 	passives = {
 		{ "Garuda", "Cosmetic: a serpentine shikigami orbiting the user." },
 	},

@@ -32,6 +32,11 @@ K.Character( "tenshadows", {
 	model = K.Model( "tenshadows", "models/player/group01/male_08.mdl" ),
 	color = Color( 120, 120, 200 ),
 
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = {
+		Frames = { { 13, 6, 13 }, { 13, 6, 13 }, { 12, 7, 15 } },
+	},
+
 	abilities = BASE,
 	special = LURKING,
 

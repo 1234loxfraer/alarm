@@ -11,6 +11,11 @@ K.Character( "puppetmaster", {
 	model = K.Model( "puppetmaster", "models/player/combine_soldier.mdl" ),
 	color = Color( 140, 170, 190 ),
 
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = {
+		Frames = { { 14, 5, 11 }, { 11, 9, 19 }, { 11, 9, 19 } },
+	},
+
 	passives = {
 		{ "Ultimate Proxy", "Cosmetic: a metal forearm guard that sparks on hit." },
 		{ "Energy Reserves", "A second awakening bar keeps filling once the first is full (+50% speed) and extends Absolute. (TODO)" },

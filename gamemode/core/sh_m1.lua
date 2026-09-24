@@ -1,5 +1,7 @@
 -- Basic attacks (M1). The string length, damage and timings come from the character's m1 table.
 -- Final hit variants: 0 = neutral, 1 = uppercut (rising / holding jump), 2 = downslam (falling).
+-- m1.Frames = { { startup, recovery, blockEndlag }, ... } gives per-hit timings in 60 fps frames
+-- (dogslamloop frame data); hits without an entry use Startup / Duration. Active frames are 1.
 
 local S = JJS.STUD
 local U = JJS.Util
@@ -26,7 +28,9 @@ function M.TryStart( ply, mv )
 	if not mv:KeyDown( JJS.IN.M1 ) then return end
 	local now = CurTime()
 	if now < ply:GetJM1CD() then return end
-	if not JJS.CanAct( ply ) or JJS.IsBlocking( ply ) or JJS.IsDashing( ply ) or JJS.IsBusy( ply ) then return end
+	-- Side Dash M1: M1s can come out during a side/back dash (not a front dash)
+	local dash = ply:GetJDashType()
+	if not JJS.CanAct( ply ) or JJS.IsBlocking( ply ) or dash == JJS.Dash.FRONT or JJS.IsBusy( ply ) then return end
 	if ply:GetJMoveState() == JJS.MOVE_WALLRUN then return end
 
 	local cfg = JJS.GetChar( ply ).m1
@@ -46,6 +50,19 @@ function M.FindTargets( ply, cfg, variant )
 	local yaw = ply:EyeAngles().y
 	local center = U.BodyCenter( ply ) + U.YawForward( yaw ) * cfg.HitCenter
 	return U.PlayersInBox( center, yaw, cfg.HitSize, { ignore = ply, ragdolled = variant == M.DOWN } )
+end
+
+-- Timings of hit `idx`: startup, action length, extra lock when blocked (seconds)
+function M.Timing( cfg, idx )
+	local fr = cfg.Frames and cfg.Frames[ idx ]
+	local final = idx >= cfg.Count
+	if fr then
+		local startup = fr[ 1 ] / 60
+		local dur = final and math.max( cfg.FinalDuration, startup + 0.1 ) or ( fr[ 1 ] + 1 + fr[ 2 ] ) / 60
+		return startup, dur, ( fr[ 3 ] - fr[ 2 ] ) / 60
+	end
+	local dur = final and cfg.FinalDuration or cfg.Duration
+	return cfg.Startup, dur, nil
 end
 
 -- Builds the hit table for one target
@@ -119,21 +136,22 @@ function M.DoHit( ply, var )
 			JJS.Destruction.GroundImpact( landed:GetPos() + Vector( 0, 0, 20 ), cfg.CraterScale, Vector( 0, 0, -1 ) )
 		end
 	elseif blocked then
-		-- blocked M1s have double the endlag: add the remaining recovery once more
-		JJS.ExtendAction( ply, math.max( ply:GetJActEnd() - CurTime(), 0.1 ) )
+		-- blocked M1s have longer endlag (about double the recovery)
+		local _, _, extra = M.Timing( cfg, idx )
+		JJS.ExtendAction( ply, extra or math.max( ply:GetJActEnd() - CurTime(), 0.1 ) )
 	end
 	hook.Run( "JJS_M1", ply, idx, variant, landed, blocked )
 end
 
-local function Startup( ply )
-	return JJS.GetChar( ply ).m1.Startup
+local function Startup( ply, var )
+	local startup = M.Timing( JJS.GetChar( ply ).m1, M.Unpack( var or ply:GetJActVar() ) )
+	return startup
 end
 
 JJS.RegisterAction( "m1", {
 	dur = function( ply, var )
-		local cfg = JJS.GetChar( ply ).m1
-		local idx = M.Unpack( var )
-		return idx >= cfg.Count and cfg.FinalDuration or cfg.Duration
+		local _, dur = M.Timing( JJS.GetChar( ply ).m1, M.Unpack( var ) )
+		return dur
 	end,
 	moveMult = function( ply ) return JJS.GetChar( ply ).m1.MoveMult end,
 	dashCancel = Startup,

@@ -12,6 +12,11 @@ K.Character( "aspiringmangaka", {
 	model = K.Model( "aspiringmangaka", "models/player/kleiner.mdl" ),
 	color = Color( 230, 230, 230 ),
 
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
+	m1 = {
+		Frames = { { 12, 8, 17 }, { 11, 9, 19 }, { 12, 8, 17 } },
+	},
+
 	passives = {
 		{ "G-Warstaff", "Cosmetic: a staff whose trail reddens as the awakening bar fills." },
 		{ "Oracle", "360 perfect block: blocking within 0.05-0.25s of impact evades with an afterimage. (TODO)" },
