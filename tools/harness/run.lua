@@ -260,6 +260,8 @@ if SERVER then
 		if opts.air then A:SetPos( Vector( 0, 0, 150 ) ) A.onGround = false end
 		if opts.airTarget then B:SetPos( Vector( 70, 0, 120 ) ) B.onGround = false end
 		if opts.ragdolled then JJS.Ragdoll.Apply( B, { time = 3 } ) Run( 0.3 ) end
+		-- aim at the target like a player would
+		A:SetEyeAngles( ( B:GetPos() + Vector( 0, 0, 40 ) - A:EyePos() ):Angle() )
 		Press( KEYS[ slot ], opts.hold, nil, opts.back and -400 )
 		if opts.again then Run( 0.15 ) Press( KEYS[ slot ] ) end
 		if opts.special then Run( 0.05 ) Press( JJS.IN.SPECIAL ) end

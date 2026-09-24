@@ -11,7 +11,7 @@
 --   endlag (after the last hit when it lands), whiffEndlag (when nothing was hit), blockEndlag (when blocked)
 --   Frame data from dogslamloop.com is in 60 fps frames: seconds = frames / 60 (K.F(frames))
 --   stun, ragdoll (true or { time, h, v } in studs/s; h < 0 pulls toward the user), trueRag (no evasive)
---   bypassRagdoll, armor ("melee", "bullet", "total"), uninterruptible, iframes (during the move)
+--   bypassRagdoll, armor ("melee", "bullet", "total" or a list), uninterruptible, iframes (during the move)
 --   heal, selfDamage, color (JJS.Kit.PALETTE key), crater (destruction scale on impact)
 --   onHit(ply, victim, p) when the final hit lands
 --   awakenCost (fraction of the awakening bar spent), noCooldown, charges (uses per cooldown)
@@ -29,6 +29,8 @@
 -- Kinds and their own fields:
 --   Melee      reach, width, height, lunge (studs travelled during the startup)
 --   Grab       like Melee; a caught target is held in front for the remaining hits
+--   Rush       startup in place, then travel (studs over time seconds) with the hitbox active; the first
+--              target met is caught and takes the remaining hits (held in front); iframesOnHit (seconds)
 --   Beam       range, radius, pierce, duration (channelled), tick, clash (beam clash strength)
 --   Projectile speed, range, radius, count, spread, explode (radius), gravity
 --   Summon     a slow projectile (shikigami, swarms)
@@ -36,7 +38,9 @@
 --   Counter    window, counters = { melee = "counter", bullet = "evade", ... }, riposte (damage), teleport,
 --              onCounter(ply, attacker, hit, mode)
 --   Target     range (studs to the aimed target), then hits it like Melee after appearing next to it
---              (noHit = true: only teleports; teleport = false: hits the target from where the user stands)
+--              (noHit = true: only teleports; teleport = false: hits the target from where the user stands;
+--              pullIn = true: the first hit drags the target in front of the user)
+--   specialAfter = spec with a `window`: pressing the special right after the move (Face Grater...)
 --   Mobility   travel, time, dir ("forward", "back", "up", "aim"), hit (hit at the end)
 --   Buff       duration, speed, speedTime, evasive, awaken
 --   Zone       lingering area: radius, duration, tick, damage (per tick), follow (stays on the user), offset
@@ -86,6 +90,8 @@ local DMG_BY_NAME = {
 local DEFAULTS = {
 	melee = { startup = 0.3, endlag = 0.35, reach = 7, width = 7, height = 7, type = "melee", color = "white" },
 	grab = { startup = 0.3, endlag = 0.35, reach = 5, width = 6, height = 7, type = "melee", hits = 3, interval = 0.25, color = "white" },
+	rush = { startup = 0.3, endlag = 0.35, travel = 25, time = 0.5, reach = 5, width = 6, height = 7, type = "melee", hits = 3, interval = 0.25,
+		color = "white" },
 	beam = { startup = 0.5, endlag = 0.4, range = 60, radius = 2.5, type = "bullet", tick = 0.2, color = "cyan" },
 	projectile = { startup = 0.35, endlag = 0.35, speed = 120, range = 90, radius = 2, type = "bullet", color = "blue" },
 	aoe = { startup = 0.45, endlag = 0.4, radius = 14, offset = 0, type = "explosion", color = "orange" },
@@ -115,6 +121,7 @@ end
 
 K.Melee = Kind( "melee" )
 K.Grab = Kind( "grab" )
+K.Rush = Kind( "rush" )
 K.Beam = Kind( "beam" )
 K.Projectile = Kind( "projectile" )
 K.Summon = Kind( "projectile", { speed = 45, radius = 4, type = "swarm", color = "shadow" } )
@@ -164,7 +171,13 @@ local function Params( spec, over )
 		}
 	end
 	if p.armor then
-		p.armorTypes = p.armor == "total" and { all = true } or { [ DMG_BY_NAME[ p.armor ] or 0 ] = true }
+		-- "total", one damage type name, or a list of them
+		if p.armor == "total" then
+			p.armorTypes = { all = true }
+		else
+			p.armorTypes = {}
+			for _, a in ipairs( istable( p.armor ) and p.armor or { p.armor } ) do p.armorTypes[ DMG_BY_NAME[ a ] or 0 ] = true end
+		end
 	end
 	return p
 end
@@ -412,6 +425,68 @@ IMPL.grab = function( p )
 	return def
 end
 
+-- Rush: startup, then travel with an active hitbox; contact starts the hit sequence
+IMPL.rush = function( p )
+	local def = Base( p )
+	local base = def.start
+	local travelEnd = p.startup + p.time
+	def.dur = travelEnd + ( p.whiffEndlag or p.endlag )
+	def.moveMult = p.moveMult or 0.1
+	def.noJump = true
+	def.start = function( ply )
+		base( ply )
+		ply.jjs_rush = { contact = nil, idx = 0 }
+	end
+	def.move = function( ply, mv, t )
+		local st = ply.jjs_rush
+		if t < p.startup or t >= travelEnd or ( st and st.contact ) then return false end
+		K.Drive( ply, mv, K.Fwd( ply ) * ( p.travel / p.time ) )
+		return true
+	end
+	def.think = function( ply, t )
+		local st = ply.jjs_rush
+		if not st then return end
+		if not st.contact then
+			if t < p.startup or t >= travelEnd then return end
+			local v = K.BoxTargets( ply, p )[ 1 ]
+			if not v then return end
+			st.contact = t
+			if CLIENT then return end
+			local r = K.Apply( ply, p, v, 1 )
+			st.idx = 1
+			if r == "hit" then
+				ply:SetJActTarget( v )
+				if p.iframesOnHit then JJS.IFrames( ply, p.iframesOnHit ) end
+				ply:SetJActEnd( CurTime() + ( p.hits - 1 ) * p.interval + p.endlag )
+			else
+				-- blocked (or countered): the rush ends here
+				st.idx = p.hits
+				ply:SetJActEnd( CurTime() + ( r == "blocked" and ( p.blockEndlag or 0.5 ) or p.endlag ) )
+			end
+			return
+		end
+		if CLIENT or st.idx >= p.hits then return end
+		local v = ply:GetJActTarget()
+		if not IsValid( v ) or not v:Alive() then return end
+		-- hold the caught target in front
+		if not v:GetJRagdolled() then
+			local pos = ply:GetPos() + K.Fwd( ply ) * 40
+			if U.HullFits( v, pos ) then v:SetPos( pos ) end
+			v:SetLocalVelocity( vector_origin )
+			JJS.Stun( v, 0.3 )
+		end
+		if t >= st.contact + st.idx * p.interval then
+			st.idx = st.idx + 1
+			K.Apply( ply, p, v, st.idx )
+		end
+	end
+	def.finish = function( ply, var, interrupted )
+		ply.jjs_rush = nil
+		if SERVER and p.onEnd and not interrupted then p.onEnd( ply, p ) end
+	end
+	return def
+end
+
 local function FireRay( ply, p, tick )
 	local dir = K.AimDir( ply, p.maxPitch or 0.5 )
 	local start = K.Muzzle( ply )
@@ -492,8 +567,15 @@ IMPL.target = function( p )
 		if not IsValid( v ) or not v:Alive() then return end
 		local reach = p.teleport == false and p.range + 60 or p.reach + 40
 		if v:GetPos():DistToSqr( ply:GetPos() ) > reach ^ 2 then return end
-		K.Apply( ply, p, v, i )
+		local r = K.Apply( ply, p, v, i )
 		if i == 1 and p.teleport == false then K.Effect( "jjs_kit_burst", U.BodyCenter( v ), nil, v, 40, p ) end
+		if i == 1 and p.pullIn and r == "hit" and not v:GetJRagdolled() then
+			local pos = ply:GetPos() + K.Fwd( ply ) * 44
+			if U.HullFits( v, pos ) then
+				v:SetPos( pos )
+				v:SetLocalVelocity( vector_origin )
+			end
+		end
 	end )
 	return def
 end
@@ -725,7 +807,10 @@ local function Start( ply, mv, slot, ab, move, skipCooldown )
 			end
 		end
 	end
-	JJS.StartAction( ply, move.action, slot, target )
+	local def = JJS.StartAction( ply, move.action, slot, target )
+	if ab.specialAfter and def then
+		ply.jjs_specialAfter = { t = CurTime() + JJS.Resolve( def.dur, ply, slot ) + ( ab.spec.specialAfter.window or 0.6 ), ab = ab.specialAfter }
+	end
 	if ab.again then
 		ply.jjs_again = ply.jjs_again or {}
 		ply.jjs_again[ slot ] = { t = CurTime() + ( ab.spec.again.window or 1.5 ), ab = ab }
@@ -756,6 +841,17 @@ end
 
 -- Special pressed during a move's startup: that move's SPECIAL variant (returns true when used)
 function K.TrySpecialVariant( ply, mv )
+	-- follow-up right after a move (Face Grater after Rapid Punches...)
+	local fa = ply.jjs_specialAfter
+	if fa and CurTime() < fa.t and ( ply.jjs_kitLanded or fa.ab.spec.anyway ) and JJS.GetCooldown( ply, 5 ) <= CurTime()
+		and ply:Alive() and not ply:GetJRagdolled() and not JJS.IsStunned( ply ) then
+		ply.jjs_specialAfter = nil
+		JJS.StopAction( ply, true )
+		JJS.SetCooldown( ply, 5, fa.ab.cooldown )
+		fa.ab.Use( ply, mv, 0 )
+		return true
+	end
+
 	local act = JJS.GetAction( ply )
 	local sv = act and act.kitSpecial
 	if not sv or JJS.ActionTime( ply ) >= act.kitParams.startup then return false end
@@ -847,6 +943,7 @@ function Build( id, key, spec )
 			V[ vk ].action = Register( name .. "." .. vk, V[ vk ].p )
 		end
 	end
+	if spec.specialAfter then ab.specialAfter = Build( id, key .. ".after", spec.specialAfter ) end
 	if spec.miss then
 		local missAb = Build( id, key .. ".miss", spec.miss )
 		for _, m in ipairs( { move, air, hold, V.airTarget, V.ragdolled, V.back } ) do
