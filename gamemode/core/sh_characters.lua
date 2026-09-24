@@ -73,6 +73,7 @@ end
 
 function JJS.TryAbility( ply, mv, slot )
 	if slot == 5 and JJS.Kit.TrySpecialVariant( ply, mv ) then return end
+	if slot ~= 5 and JJS.Kit.TryCombo( ply, mv, slot ) then return end
 	local ab = JJS.GetAbility( ply, slot )
 	if not ab then return end
 	if ab.Again and ab.Again( ply, mv, slot ) then return end

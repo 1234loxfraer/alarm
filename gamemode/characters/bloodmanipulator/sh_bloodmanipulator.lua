@@ -11,7 +11,7 @@ local function UseOrb( ply )
 	return true
 end
 
--- Conjures 4 blood orbs condensed to their limit (only when none remain). Costs 10% awakening.
+-- Conjures 4 blood orbs condensed to their limit (0.65s; only when none remain). Costs 10% awakening.
 local CONVERGENCE = K.Buff{ "Convergence", cooldown = 20, startup = 0.2, duration = 0.45, awakenCost = 0.1, color = "blood",
 	CanUse = function( ply ) return Orbs( ply ) <= 0 end,
 	onUse = function( ply ) ply:SetJRes1( 4 ) end }
@@ -35,18 +35,28 @@ local BM = K.Character( "bloodmanipulator", {
 			bypassRagdoll = true, color = "blood", ragdoll = { h = 35, v = 12 },
 			hold = { time = 1.35, damage = 20, range = 60, block = "none", trueRag = true, ragdoll = { h = 70, v = 20 },
 				onUse = function( ply ) UseOrb( ply ) end } },
-		-- Dashes forward; on contact, three kicks (3 each) then a ragdolling last hit (4). Blockable from all sides.
-		-- Air variant: a downward axe kick that ragdolls upward (6); falling 1s triggers a blood spring (5 self damage).
-		-- TODO special variant "Stack": with an orb, the last kick explodes (17 total).
-		[ 2 ] = K.Grab{ "Flowing Red Scale", cooldown = 12, startup = 0.25, damage = 13, hits = 4, interval = 0.22, lunge = 18, type = "melee",
-			block = "all", bypassRagdoll = true, ragdoll = { h = 50, v = 20 },
-			air = { kind = "melee", damage = 6, hits = 1, block = "none", ragdoll = { h = 5, v = 50 }, height = 16 } },
-		-- Without orbs: a cross-armed guard; a melee hit is hardened with blood and answered with a cut and a punch (7 + 7).
-		-- TODO special variant: with orbs, tosses an orb that becomes a blood bomb following the user (8 on detonation).
-		[ 3 ] = K.Counter{ "Supernova", cooldown = 15, window = 0.6, counters = { melee = "counter" }, riposte = 14, color = "blood" },
-		-- Blood blades: a thrusting jab (5) then a flip slamming the floor (6); missing the stab doesn't cancel the slam.
-		[ 4 ] = K.Melee{ "Blood Edge", cooldown = 13, startup = 0.3, damage = 11, hits = 2, interval = 0.45, type = "melee", blockDamage = 5.5,
-			bypassRagdoll = true, ragdoll = { h = 40, v = 15 } },
+		-- Dashes forward; on contact, the rush (3), two kicks (3 each) and a ragdolling last kick (4). 360 blockable, hits ragdolls.
+		-- With an orb ("Stack"): the last kick is amplified by a blood explosion (8, 17 total).
+		-- Air variant: a downward axe kick that ragdolls upward (6, unblockable; its evasive-bait use is the main one);
+		-- falling 1s triggers a blood spring (5 self damage). TODO air orb variant: a static blood mine (10, 15 to the user).
+		[ 2 ] = K.Rush{ "Flowing Red Scale", cooldown = 12, startup = 0.2, travel = 18, time = 0.3, hits = 4, interval = 0.22, hitDamage = { 3, 3, 3, 4 },
+			type = "melee", block = "all", bypassRagdoll = true, ragdoll = { h = 50, v = 20 },
+			cond = { test = function( ply ) return Orbs( ply ) > 0 end, hitDamage = { 3, 3, 3, 8 }, color = "blood",
+				onUse = function( ply ) UseOrb( ply ) end },
+			air = { kind = "melee", damage = 6, hits = 1, hitDamage = false, block = "none", ragdoll = { h = 5, v = 50 }, height = 16, startup = 0.3 } },
+		-- Without orbs: a cross-armed guard (0.6s); a melee hit is hardened with blood and answered with a cut and a punch
+		-- (7 + 7). Stays off cooldown when it lands.
+		-- With orbs ("Killer Queen"): tosses an orb that becomes a blood bomb mimicking the user's movement 20 studs away;
+		-- the special detonates it in a 10x10 area (8, 4s cooldown; the real bomb waits for the special).
+		[ 3 ] = K.Counter{ "Supernova", cooldown = 15, window = 0.6, counters = { melee = "counter" }, riposte = 14, color = "blood",
+			onCounter = function( ply ) timer.Simple( 0, function() if IsValid( ply ) then ply:SetJCD3( 0 ) end end ) end,
+			cond = { test = function( ply ) return Orbs( ply ) > 0 end, kind = "aoe", cooldown = 4, startup = 0.7, damage = 8, radius = 5, offset = 20,
+				type = "explosion", block = "normal", bypassRagdoll = true, ragdoll = { h = 40, v = 25 },
+				onUse = function( ply ) UseOrb( ply ) end } },
+		-- Blood blades: a thrusting jab (5, blockable, not on grounded ragdolls) then a flip slamming the floor (6, unblockable,
+		-- hits ragdolls); missing the stab doesn't cancel the slam.
+		[ 4 ] = K.Melee{ "Blood Edge", cooldown = 13, startup = 0.3, hits = 2, interval = 0.45, hitDamage = { 5, 6 }, hitBlock = { "normal", "none" },
+			hitBypass = { false, true }, type = "melee", ragdoll = { h = 40, v = 15 } },
 	},
 	special = CONVERGENCE,
 

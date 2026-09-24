@@ -38,9 +38,17 @@ if SERVER then
 		e:Spawn()
 		e:SetColorId( p.colorId )
 		e:SetRadius( p.radius )
+		-- near = { dist (studs), ragdoll = {...} }: hits within `dist` of the muzzle ragdoll instead
+		local nearP
+		if p.near then
+			nearP = table.Copy( p )
+			local r = p.near.ragdoll or {}
+			nearP.ragdoll = { time = r.time or 1, h = ( r.h or 35 ) * JJS.STUD, v = ( r.v or 15 ) * JJS.STUD }
+		end
 		e.jjs = {
 			owner = owner,
 			p = p,
+			nearP = nearP,
 			vel = dir * p.speed,
 			left = p.range,
 			last = CurTime(),
@@ -85,7 +93,9 @@ if SERVER then
 			local v = h.ply
 			if st.hit[ v ] then continue end
 			st.hit[ v ] = true
-			K.Apply( st.owner, p, v, nil, from )
+			local travelled = p.range - st.left + h.dist
+			local hp = ( st.nearP and travelled <= p.near.dist * JJS.STUD ) and st.nearP or p
+			K.Apply( st.owner, hp, v, nil, from )
 			if not p.pierce then
 				self:Explode( from + dir * h.dist )
 				return

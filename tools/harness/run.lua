@@ -238,6 +238,7 @@ if SERVER then
 		B:SetEyeAngles( Angle( 0, 180, 0 ) )
 		for _, d in ipairs( ents.FindByClass( "jjs_domain" ) ) do d:Remove() end
 		for _, d in ipairs( ents.FindByClass( "jjs_projectile" ) ) do d:Remove() end
+		for k in pairs( JJS.Kit.Zones ) do JJS.Kit.Zones[ k ] = nil end
 		A:SetNW2Entity( "JJSDomain", NULL )
 		B:SetNW2Entity( "JJSDomain", NULL )
 		Run( 0.1 )
@@ -258,6 +259,7 @@ if SERVER then
 		local before = hits[ A ] or 0
 		A.jjs_acts = {}
 		if opts.air then A:SetPos( Vector( 0, 0, 150 ) ) A.onGround = false end
+		if opts.highAir then A:SetPos( Vector( 0, 0, 400 ) ) A.onGround = false end
 		if opts.airTarget then B:SetPos( Vector( 70, 0, 120 ) ) B.onGround = false end
 		if opts.ragdolled then JJS.Ragdoll.Apply( B, { time = 3 } ) Run( 0.3 ) end
 		-- aim at the target like a player would
@@ -265,6 +267,8 @@ if SERVER then
 		Press( KEYS[ slot ], opts.hold, nil, opts.back and -400 )
 		if opts.again then Run( 0.15 ) Press( KEYS[ slot ] ) end
 		if opts.special then Run( 0.05 ) Press( JJS.IN.SPECIAL ) end
+		if opts.combo then Run( 0.05 ) Press( KEYS[ opts.combo ] ) end
+		if opts.after then Run( opts.after ) Press( JJS.IN.SPECIAL ) end
 		Run( opts.time or 3 )
 		local n = ( hits[ A ] or 0 ) - before
 		report[ #report + 1 ] = string.format( "  %-13s %d %-34s hits=%d %s", label, slot, ab.name, n, table.concat( A.jjs_acts or {}, "," ) )
@@ -287,6 +291,16 @@ if SERVER then
 			if V.airTarget then TrySlot( "airTarget", slot, { airTarget = true } ) end
 			if V.ragdolled then TrySlot( "ragdolled", slot, { ragdolled = true } ) end
 			if V.special then TrySlot( "special", slot, { special = true } ) end
+			if V.highAir then TrySlot( "highAir", slot, { highAir = true } ) end
+			if ab and ab.specialAfter then TrySlot( "after", slot, { after = 1.2 } ) end
+			if V.cond then
+				local c = ab.spec.cond
+				local test = c.test
+				c.test = function() return true end
+				TrySlot( "cond", slot, {} )
+				c.test = test
+			end
+			for cs in pairs( ab and ab.spec and ab.spec.combo or {} ) do TrySlot( "combo" .. cs, slot, { combo = cs } ) end
 		end
 		-- alternate set
 		local char = JJS.Characters[ id ]
@@ -324,6 +338,16 @@ if SERVER then
 				if V.airTarget then TrySlot( "awk-airTarget", slot, { airTarget = true } ) end
 				if V.ragdolled then TrySlot( "awk-ragdolled", slot, { ragdolled = true } ) end
 				if V.special then TrySlot( "awk-special", slot, { special = true } ) end
+				if V.highAir then TrySlot( "awk-highAir", slot, { highAir = true } ) end
+				if ab and ab.specialAfter then TrySlot( "awk-after", slot, { after = 1.2 } ) end
+				if V.cond then
+					local c = ab.spec.cond
+					local test = c.test
+					c.test = function() return true end
+					TrySlot( "awk-cond", slot, {} )
+					c.test = test
+				end
+				for cs in pairs( ab and ab.spec and ab.spec.combo or {} ) do TrySlot( "awk-combo" .. cs, slot, { combo = cs } ) end
 			end
 			if char.awakening and char.awakening.alt then
 				for slot = 1, 5 do TrySlot( "awk-alt", slot, { setup = function() A:SetJKitSet( 1 ) end } ) end

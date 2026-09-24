@@ -16,12 +16,15 @@
 --   onHit(ply, victim, p) when the final hit lands
 --   awakenCost (fraction of the awakening bar spent), noCooldown, charges (uses per cooldown)
 --   slow = { mult, time } applied to targets hit, onEnd(ply, p) when the move finishes uninterrupted
---   hitDamage = { per hit }, hitBlock = { per hit block rule }
+--   hitDamage = { per hit }, hitBlock = { per hit block rule }, hitBypass = { per hit: hits ragdolls }
+--   A variant's own `cooldown` replaces the move's cooldown when that variant is used.
 --   interrupt = { damage (bonus), stun, ragdoll } when the hit interrupts the target's action (HIT tip)
 --   Variants (tables of overrides, each becomes its own action):
 --     air (user airborne), airTarget (target airborne), ragdolled (target ragdolled), back (walking
---     backward: DIRECTION), special (special pressed during the startup: SPECIAL; `free` = ignores the
---     special's cooldown, `specialCooldown` = cooldown put on the special), miss (spec started when
+--     backward: DIRECTION), highAir (airborne well above jump height), cond (cond.test(ply) is true),
+--     special (special pressed during the startup: SPECIAL; `free` = ignores the special's cooldown,
+--     `specialCooldown` = cooldown put on the special), combo = { [slot] = overrides } (another move's key
+--     pressed during the startup: both moves go on cooldown unless `free`), miss (spec started when
 --     nothing was hit),
 --   air = { overrides } (used while airborne), hold = { time, overrides } (HOLD variant),
 --   again = spec with a `window` (USE AGAIN / USE TWICE follow-up), onUse(ply, p) when the move starts
@@ -43,7 +46,8 @@
 --   specialAfter = spec with a `window`: pressing the special right after the move (Face Grater...)
 --   Mobility   travel, time, dir ("forward", "back", "up", "aim"), hit (hit at the end)
 --   Buff       duration, speed, speedTime, evasive, awaken
---   Zone       lingering area: radius, duration, tick, damage (per tick), follow (stays on the user), offset
+--   Zone       lingering area: radius, duration, tick, damage (per tick), follow (stays on the user), offset,
+--              target = true (placed on the aimed target within range and follows them)
 --   Domain     duration, sureHit ("damage", "stun", "drain"), dps, radius
 --   Toggle     switches to the alternate moveset (def.alt)
 --   Feint      cancels the startup of the move being performed and refunds its cooldown
@@ -203,7 +207,7 @@ function K.MakeHit( ply, p, victim, idx, from )
 		type = p.dmgType,
 		block = p.hitBlock and p.hitBlock[ idx ] or p.block,
 		blockDamage = p.blockDamage and p.blockDamage / p.hits,
-		bypassRagdoll = p.bypassRagdoll,
+		bypassRagdoll = p.hitBypass and p.hitBypass[ idx ] or ( not p.hitBypass and p.bypassRagdoll ),
 		ignoreIFrames = p.ignoreIFrames,
 		startTime = ply:GetJActStart(),
 		from = from,
@@ -256,7 +260,7 @@ function K.BoxTargets( ply, p )
 	local yaw = ply:EyeAngles().y
 	local center = U.BodyCenter( ply ) + U.YawForward( yaw ) * ( p.reach / 2 + 8 )
 	U.LagComp( ply, true )
-	local list = U.PlayersInBox( center, yaw, Vector( p.reach, p.width, p.height ), { ignore = ply, ragdolled = p.bypassRagdoll } )
+	local list = U.PlayersInBox( center, yaw, Vector( p.reach, p.width, p.height ), { ignore = ply, ragdolled = p.bypassRagdoll or p.hitBypass ~= nil } )
 	U.LagComp( ply, false )
 	return list
 end
@@ -649,7 +653,13 @@ IMPL.zone = function( p )
 	def.events = { { p.startup, function( ply )
 		if CLIENT then return end
 		local center = ply:GetPos() + K.Fwd( ply ) * p.offset
-		K.Zones[ #K.Zones + 1 ] = { owner = ply, p = p, pos = center, stop = CurTime() + p.duration, nextTick = CurTime() }
+		local ent
+		if p.target then
+			ent = ply:GetJActTarget()
+			if not IsValid( ent ) then return end
+			center = ent:GetPos()
+		end
+		K.Zones[ #K.Zones + 1 ] = { owner = ply, p = p, pos = center, ent = ent, stop = CurTime() + p.duration, nextTick = CurTime() }
 	end } }
 	return def
 end
@@ -660,11 +670,14 @@ if SERVER then
 		for i = #K.Zones, 1, -1 do
 			local z = K.Zones[ i ]
 			local ply = z.owner
-			if not IsValid( ply ) or not ply:Alive() or now >= z.stop or ( z.p.stopOnRagdoll ~= false and ply:GetJRagdolled() ) then
+			local stopped = z.p.stopOnHit and ( ply:GetJLastHurt() > z.stop - z.p.duration )
+			if not IsValid( ply ) or not ply:Alive() or now >= z.stop or stopped or ( z.p.stopOnRagdoll ~= false and ply:GetJRagdolled() )
+				or ( z.p.target and not IsValid( z.ent ) ) then
 				table.remove( K.Zones, i )
 			elseif now >= z.nextTick then
 				z.nextTick = now + z.p.tick
 				local center = z.p.follow and ply:GetPos() or z.pos
+				if IsValid( z.ent ) then center = z.ent:GetPos() end
 				for _, v in ipairs( K.SphereTargets( center + Vector( 0, 0, 36 ), z.p.radius, ply, z.p.bypassRagdoll ) ) do
 					JJS.Hit( v, K.MakeHit( ply, z.p, v, 1, center ) )
 				end
@@ -787,14 +800,14 @@ local function Start( ply, mv, slot, ab, move, skipCooldown )
 			ply.jjs_charges[ ab ] = left
 			JJS.SetCooldown( ply, slot, left == charges and ab.cooldown or ( ab.spec.chargeDelay or 0.8 ) )
 		else
-			JJS.SetCooldown( ply, slot, ab.cooldown )
+			JJS.SetCooldown( ply, slot, move.p.cooldown or ab.cooldown )
 		end
 	end
 	local target
-	if move.p.kind == "target" then
+	if move.p.kind == "target" or move.p.target then
 		target = K.AimTarget( ply, move.p.range, move.p.cone )
 		if not IsValid( target ) then return end
-		if move.p.teleport ~= false then
+		if move.p.kind == "target" and move.p.teleport ~= false then
 			local dir = U.Flat( target:GetPos() - ( mv and mv:GetOrigin() or ply:GetPos() ) )
 			local pos = target:GetPos() - dir * 36
 			if U.HullFits( ply, pos ) then
@@ -827,6 +840,7 @@ end
 
 -- Chooses the variant for the current situation: direction, target state, then the user's
 function K.PickVariant( ply, mv, p, V, air, move )
+	if V.cond and p.cond.test( ply ) then return V.cond end
 	if V.back and mv and mv:GetForwardSpeed() < 0 then return V.back end
 	if V.airTarget or V.ragdolled then
 		local t = p.kind == "target" and K.AimTarget( ply, p.range, p.cone ) or K.FrontTarget( ply, p )
@@ -835,11 +849,27 @@ function K.PickVariant( ply, mv, p, V, air, move )
 			if V.airTarget and not t:IsOnGround() and not t:GetJRagdolled() then return V.airTarget end
 		end
 	end
+	if V.highAir and not ply:IsOnGround() then
+		local pos = ply:GetPos()
+		local tr = util.TraceLine( { start = pos, endpos = pos - Vector( 0, 0, 7 * S ), mask = MASK_PLAYERSOLID, filter = ply } )
+		if not tr.Hit then return V.highAir end
+	end
 	if air and not ply:IsOnGround() then return air end
 	return move
 end
 
--- Special pressed during a move's startup: that move's SPECIAL variant (returns true when used)
+-- A key pressed during a move's startup: that move's combo variant (returns true when used)
+function K.TryCombo( ply, mv, slot )
+	local act = JJS.GetAction( ply )
+	local c = act and act.kitCombos and act.kitCombos[ slot ]
+	if not c or JJS.ActionTime( ply ) >= act.kitParams.startup then return false end
+	if not c.free and JJS.GetCooldown( ply, slot ) > CurTime() then return false end
+	if not ply:Alive() or ply:GetJRagdolled() or JJS.IsStunned( ply ) then return false end
+	c.trigger( ply, mv, slot )
+	return true
+end
+
+-- Special pressed: a follow-up right after a move, or the current move's SPECIAL variant
 function K.TrySpecialVariant( ply, mv )
 	-- follow-up right after a move (Face Grater after Rapid Punches...)
 	local fa = ply.jjs_specialAfter
@@ -852,13 +882,7 @@ function K.TrySpecialVariant( ply, mv )
 		return true
 	end
 
-	local act = JJS.GetAction( ply )
-	local sv = act and act.kitSpecial
-	if not sv or JJS.ActionTime( ply ) >= act.kitParams.startup then return false end
-	if not sv.free and JJS.GetCooldown( ply, 5 ) > CurTime() then return false end
-	if not ply:Alive() or ply:GetJRagdolled() or JJS.IsStunned( ply ) then return false end
-	sv.trigger( ply, mv )
-	return true
+	return K.TryCombo( ply, mv, 5 )
 end
 
 function Build( id, key, spec )
@@ -937,12 +961,22 @@ function Build( id, key, spec )
 
 	-- conditional variants
 	local V = {}
-	for _, vk in ipairs( { "airTarget", "ragdolled", "back", "special" } ) do
+	for _, vk in ipairs( { "airTarget", "ragdolled", "back", "highAir", "cond" } ) do
 		if spec[ vk ] then
 			V[ vk ] = { p = Params( spec, spec[ vk ] ) }
 			V[ vk ].action = Register( name .. "." .. vk, V[ vk ].p )
 		end
 	end
+	-- combos: another key pressed during the startup (the special is combo slot 5)
+	local combos = {}
+	if spec.special then combos[ 5 ] = spec.special end
+	for slot, over in pairs( spec.combo or {} ) do combos[ slot ] = over end
+	local C = {}
+	for slot, over in pairs( combos ) do
+		C[ slot ] = { p = Params( spec, over ), over = over }
+		C[ slot ].action = Register( name .. ".combo" .. slot, C[ slot ].p )
+	end
+	V.special = C[ 5 ]
 	if spec.specialAfter then ab.specialAfter = Build( id, key .. ".after", spec.specialAfter ) end
 	if spec.miss then
 		local missAb = Build( id, key .. ".miss", spec.miss )
@@ -952,17 +986,28 @@ function Build( id, key, spec )
 	end
 	ab.variants = V
 
-	-- special pressed during the startup switches to the special variant
-	if V.special then
-		local sv = spec.special
-		local function Trigger( ply, mv )
-			local slot = ply:GetJActVar()
-			JJS.StopAction( ply, true )
-			if sv.specialCooldown then JJS.SetCooldown( ply, 5, sv.specialCooldown ) end
-			Start( ply, mv, slot, ab, V.special, true )
+	-- another key (or the special) pressed during the startup switches to that combo variant
+	if next( C ) then
+		local list = {}
+		for slot, c in pairs( C ) do
+			local over = c.over
+			list[ slot ] = {
+				free = over.free,
+				trigger = function( ply, mv, pressed )
+					local slot0 = ply:GetJActVar()
+					JJS.StopAction( ply, true )
+					if pressed == 5 then
+						if over.specialCooldown then JJS.SetCooldown( ply, 5, over.specialCooldown ) end
+					elseif not over.free then
+						local other = JJS.GetAbility( ply, pressed )
+						JJS.SetCooldown( ply, pressed, over.comboCooldown or ( other and other.cooldown ) or 10 )
+					end
+					Start( ply, mv, slot0, ab, c, true )
+				end,
+			}
 		end
-		for _, m in ipairs( { move, air, hold, V.airTarget, V.ragdolled, V.back } ) do
-			if m then JJS.Actions[ m.action ].kitSpecial = { trigger = Trigger, free = sv.free } end
+		for _, m in ipairs( { move, air, hold, V.airTarget, V.ragdolled, V.back, V.highAir, V.cond } ) do
+			if m then JJS.Actions[ m.action ].kitCombos = list end
 		end
 	end
 
@@ -982,12 +1027,12 @@ function Build( id, key, spec )
 
 	ab.CanUse = function( ply, slot, mv )
 		if not DefaultCanUse( ply ) then return false end
-		if p.kind == "target" and not IsValid( K.AimTarget( ply, p.range, p.cone ) ) then return false end
+		if ( p.kind == "target" or p.target ) and not IsValid( K.AimTarget( ply, p.range, p.cone ) ) then return false end
 		if p.kind == "domain" and not JJS.Domain.CanCast( ply ) then return false end
 		if spec.CanUse and not spec.CanUse( ply, slot ) then return false end
 		return true
 	end
-	if p.kind == "target" and not ab.tip then ab.tip = "TARGET" end
+	if ( p.kind == "target" or p.target ) and not ab.tip then ab.tip = "TARGET" end
 
 	ab.Use = function( ply, mv, slot )
 		if spec.hold then

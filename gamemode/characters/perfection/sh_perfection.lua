@@ -22,24 +22,35 @@ local PERF = K.Character( "perfection", {
 	},
 
 	abilities = {
-		-- Two transfigured hammers batter the opponent twice (6 each); the second swing is unblockable and hits grounded ragdolls.
-		-- Air variant: hops and slams down with a purple hammer (10, unblockable).
-		[ 1 ] = K.Melee{ "Stockpile", cooldown = 12, startup = 0.35, damage = 12, hits = 2, interval = 0.35, type = "melee", blockDamage = 6,
-			ragdoll = { h = 60, v = 25 }, air = { damage = 10, hits = 1, block = "none", bypassRagdoll = true, ragdoll = { h = 10, v = -30 } } },
+		-- Two transfigured hammers batter the opponent twice (6 each); only the second swing breaks block and hits grounded
+		-- ragdolls, and it's guaranteed if the first lands. Fast startup, high endlag on a miss.
+		-- Air variant: hops and slams down with a purple hammer (10, unblockable) launching high enough for an air M1.
+		[ 1 ] = K.Melee{ "Stockpile", cooldown = 12, startup = 0.3, damage = 12, hits = 2, interval = 0.35, hitBlock = { "normal", "none" },
+			hitBypass = { false, true }, type = "melee", whiffEndlag = 0.7, ragdoll = { h = 60, v = 25 },
+			air = { damage = 10, hits = 1, hitBlock = false, hitBypass = false, block = "none", bypassRagdoll = true, ragdoll = { h = 10, v = 55 } } },
 		-- An arm that fires three transfigured humans as bullets (4 each), travelling 100 studs; the last one ragdolls.
 		-- TODO hold variant: shoots stored Transfigured Humans/Flesh.
 		[ 2 ] = K.Projectile{ "Soul Fire", cooldown = 12, startup = 0.35, damage = 4, count = 3, volley = 0.2, range = 100, speed = 150, radius = 3,
 			type = "bullet", bypassRagdoll = true, color = "green" },
 		-- Mode dependent
 		[ 3 ] = K.ByMode{
-			-- Normal: a cursed-energy fist to the torso that pushes back with stun.
-			-- Follow-up: pressed again with the arm wound back, the blow becomes a Black Flash (12, unblockable).
-			K.Melee{ "Focus Strike", cooldown = 15, startup = 0.4, damage = 10, type = "melee", stun = 1, tip = "USE TWICE",
-				again = K.Melee{ "Focus Strike: Black Flash", window = 0.6, startup = 0.15, damage = 12, type = "melee", block = "none",
-					bypassRagdoll = true, color = "black", ragdoll = { h = 70, v = 25 } } },
-			-- Blade: the arm becomes a chainwhip that swings up and pulls anyone caught toward the user with heavy stun.
+			-- Normal: a cursed-energy fist to the torso that pushes back with stun (doesn't hit grounded ragdolls). It keeps
+			-- the M1 string and sets it to the 4th M1 when it lands.
+			-- Follow-up (timed): pressed again with the arm wound back, a Black Flash (12, breaks block, hits ragdolls,
+			-- always ragdolls; slightly punishable on hit).
+			K.Melee{ "Focus Strike", cooldown = 15, startup = 0.4, damage = 10, reach = 9, type = "melee", stun = 1, tip = "USE TWICE",
+				onHit = function( ply )
+					ply:SetJM1Index( JJS.GetChar( ply ).m1.Count - 1 )
+					ply:SetJM1LastEnd( CurTime() )
+					ply:SetJM1CD( 0 )
+				end,
+				again = K.Melee{ "Focus Strike: Black Flash", window = 0.6, startup = 0.15, endlag = 0.5, damage = 12, reach = 9, type = "melee",
+					block = "none", bypassRagdoll = true, color = "black", ragdoll = { h = 70, v = 25 } } },
+			-- Blade: the arm becomes a chainwhip swinging up, pulling anyone caught toward the user with heavy stun
+			-- (360 blockable, hits ragdolls, resets the M1 string).
 			K.Melee{ "Chainwhip", cooldown = 15, startup = 0.35, damage = 3, reach = 16, width = 5, type = "melee", block = "all",
-				bypassRagdoll = true, stun = 1.6, ragdoll = { h = -30, v = 25, time = 0.5 } },
+				bypassRagdoll = true, stun = 1.6, ragdoll = { h = -30, v = 25, time = 0.5 },
+				onHit = function( ply ) ply:SetJM1Index( 0 ) ply:SetJM1CD( 0 ) end },
 			-- Club: a giant arm swing that uppercuts targets away.
 			K.Melee{ "Homerun", cooldown = 15, startup = 0.55, damage = 18, reach = 9, width = 10, type = "melee", block = "none",
 				bypassRagdoll = true, ragdoll = { h = 40, v = 60 } },
