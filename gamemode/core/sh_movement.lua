@@ -401,6 +401,11 @@ function GM:SetupMove( ply, mv, cmd )
 	end
 
 	if dashPressed then JJS.Dash.TryStart( ply, mv ) end
+	-- a dash forced on the player (Clairvoyance's Prediction): local direction set by the server
+	if pt.jjs_forceDash then
+		JJS.Dash.Begin( ply, mv, JJS.Dash.SIDE, pt.jjs_forceDash, true )
+		pt.jjs_forceDash = nil
+	end
 
 	for slot = 1, 4 do
 		if mv:KeyPressed( JJS.AbilityKeys[ slot ] ) then JJS.TryAbility( ply, mv, slot ) end
