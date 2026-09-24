@@ -453,6 +453,22 @@ function GM:Move( ply, mv )
 		return true
 	end
 
+	-- gliding (Blazing Star): carried along at speed, steering slightly toward the camera; a stun ends it
+	if JJS.IsGliding( ply ) then
+		if JJS.IsStunned( ply ) then
+			JJS.Glide( ply, nil, 0 )
+		else
+			local gv = ply:GetNW2Vector( "JJSGlideVel", vector_origin )
+			local speed = gv:Length()
+			local dir = U.Flat( gv )
+			local want = U.YawForward( mv:GetMoveAngles().y )
+			dir = ( dir * 0.9 + want * 0.1 ):GetNormalized()
+			local vz = M.IsGrounded( ply, mv ) and 0 or ( mv:GetVelocity().z - cfg.Gravity * FrameTime() )
+			M.Slide( ply, mv, dir * speed + Vector( 0, 0, vz ), FrameTime(), true )
+			return true
+		end
+	end
+
 	-- hovering (air combos): suspended in the air, drifting slowly with the movement keys
 	if JJS.IsHovering( ply ) then
 		local yaw = mv:GetMoveAngles().y
@@ -471,6 +487,10 @@ function GM:FinishMove( ply, mv )
 	JJS.Domain.Barrier( ply, mv )
 
 	local pt = ply:GetTable()
+	if SERVER and pt.jjs_pendingPos then
+		mv:SetOrigin( pt.jjs_pendingPos )
+		pt.jjs_pendingPos = nil
+	end
 	if SERVER and pt.jjs_pendingVel then
 		mv:SetVelocity( mv:GetVelocity() + pt.jjs_pendingVel )
 		pt.jjs_pendingVel = nil
@@ -489,6 +509,13 @@ function GM:FinishMove( ply, mv )
 		if ply:GetJWallJumps() ~= jumps and ply:GetJMoveState() ~= JJS.MOVE_WALLRUN then ply:SetJWallJumps( jumps ) end
 	end
 	pt.jjs_wasGround = onGround
+end
+
+-- Server-side teleport that also holds when made from inside the player's own movement (action events), where
+-- a plain SetPos would be overwritten by the movement result
+function JJS.Teleport( ply, pos )
+	ply:SetPos( pos )
+	ply.jjs_pendingPos = pos
 end
 
 -- Server-side velocity impulse applied inside the player's next movement (keeps prediction sane)

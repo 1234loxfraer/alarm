@@ -107,8 +107,10 @@ if SERVER then
 		for _, h in ipairs( hits ) do
 			local v = h.ply
 			if st.hit[ v ] then continue end
-			st.hit[ v ] = true
 			local travelled = p.range - st.left + h.dist
+			-- ragdollFrom: ragdolls close to the user are flown over (Pebble Throw: 20 studs)
+			if p.ragdollFrom and v:GetJRagdolled() and travelled < p.ragdollFrom then continue end
+			st.hit[ v ] = true
 			local hp = ( st.nearP and travelled <= p.near.dist * JJS.STUD ) and st.nearP or p
 			K.Apply( st.owner, hp, v, nil, from )
 			if not p.pierce then

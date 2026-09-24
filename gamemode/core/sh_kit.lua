@@ -57,11 +57,12 @@
 --   Projectile homing (steers at the target passed to K.SpawnProjectile), speed, range, radius, count, spread,
 --              explode (radius), explodeDamage, directOnly (no blast after a
 --              direct hit), gravity, guided (follows the owner's aim), ghost (passes through players),
---              onExplode(ply, pos, hitSomeone, ent), onFly(ply, pos, ent) -> true to explode there
+--              onExplode(ply, pos, hitSomeone, ent), onFly(ply, pos, ent) -> true to explode there, ragdollFrom
+--              (ragdolled players closer than this to the user are passed through)
 --   Summon     a slow projectile (shikigami, swarms)
 --   AoE        radius, offset (studs in front of the user), up (studs)
 --   Counter    window, counters = { melee = "counter", bullet = "evade", ... }, riposte (damage), teleport,
---              onCounter(ply, attacker, hit, mode)
+--              onCounter(ply, attacker, hit, mode); miss = spec used when the window passed with nothing countered
 --   Target     range (studs to the aimed target), then hits it like Melee after appearing next to it
 --              (noHit = true: only teleports; teleport = false: hits the target from where the user stands;
 --              pullIn = true: the first hit drags the target in front of the user)
@@ -138,7 +139,7 @@ local DEFAULTS = {
 }
 
 local STUDS = { reach = true, width = true, height = true, range = true, radius = true, lunge = true, backstep = true,
-	travel = true, speed = true, offset = true, explode = true, up = true, gravity = true }
+	travel = true, speed = true, offset = true, explode = true, up = true, gravity = true, ragdollFrom = true }
 
 ------------------------------------------------------------------------------------------
 -- Constructors (they only tag the table; K.Character builds it)
@@ -937,6 +938,15 @@ IMPL.counter = function( p )
 		end
 		return "evaded"
 	end
+	-- nothing countered: the miss spec (Brothers: Yuji lunges anyway)
+	def.events = { { p.window, function( ply )
+		if CLIENT or not p.missAb then return end
+		local act = JJS.GetAction( ply )
+		if act and act.kitParams == p then
+			JJS.StopAction( ply, true )
+			p.missAb.Use( ply, nil, 0 )
+		end
+	end } }
 	return def
 end
 
@@ -955,7 +965,7 @@ local function Riposte( p )
 		local v = ply:GetJActTarget()
 		if p.teleport and IsValid( v ) then
 			local behind = v:GetPos() - U.YawForward( v:EyeAngles().y ) * 40
-			if U.HullFits( ply, behind ) then ply:SetPos( behind ) end
+			if U.HullFits( ply, behind ) then JJS.Teleport( ply, behind ) end
 		end
 	end
 	def.events = { { rp.startup, function( ply )
@@ -1298,8 +1308,13 @@ function Build( id, key, spec )
 	if spec.specialAfter then ab.specialAfter = Build( id, key .. ".after", spec.specialAfter ) end
 	if spec.miss then
 		local missAb = Build( id, key .. ".miss", spec.miss )
-		for _, m in ipairs( { move, air, hold, V.airTarget, V.ragdolled, V.back } ) do
+		for _, m in ipairs( { move, air, hold, V.airTarget, V.ragdolled, V.back, V.highAir } ) do
 			if m then m.p.missAb = missAb end
+		end
+		for _, m in ipairs( V.conds or {} ) do m.p.missAb = missAb end
+		-- combos of the same kind keep it (Brutal Impact's Black Flash still has the wind gust)
+		for _, c in pairs( C ) do
+			if c.p.kind == p.kind then c.p.missAb = missAb end
 		end
 	end
 	ab.variants = V

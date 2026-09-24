@@ -36,6 +36,13 @@ function JJS.Hover( ply, seconds )
 	if seconds > 0 then ply:SetLocalVelocity( vector_origin ) end
 end
 
+-- Gliding (Blazing Star): carried along `vel` (units/s) while free to act; JJS.Glide( ply, nil, 0 ) ends it
+function JJS.IsGliding( ply ) return ply:GetNW2Float( "JJSGlide", 0 ) > CurTime() end
+function JJS.Glide( ply, vel, seconds )
+	ply:SetNW2Float( "JJSGlide", seconds > 0 and CurTime() + seconds or 0 )
+	if vel then ply:SetNW2Vector( "JJSGlideVel", vel ) end
+end
+
 -- Impaired (Jawbreaker): only walking and awakening are possible
 function JJS.IsImpaired( ply ) return ply:GetNW2Float( "JJSImpaired", 0 ) > CurTime() end
 function JJS.Impair( ply, seconds ) ply:SetNW2Float( "JJSImpaired", math.max( ply:GetNW2Float( "JJSImpaired", 0 ), CurTime() + seconds ) ) end
