@@ -79,7 +79,19 @@ function M.FindTargets( ply, cfg, variant )
 	local center = U.BodyCenter( ply ) + U.YawForward( yaw ) * off
 	local rag = variant == M.DOWN or cfg.BypassRagdoll
 	if vo and vo.bypassRagdoll ~= nil then rag = vo.bypassRagdoll end
-	return U.PlayersInBox( center, yaw, size, { ignore = ply, ragdolled = rag } )
+	local list = U.PlayersInBox( center, yaw, size, { ignore = ply, ragdolled = rag } )
+	-- NoAirRagdoll: ragdolls off the ground can't be hit (Crow Charmer's battle axe)
+	if cfg.NoAirRagdoll then
+		for i = #list, 1, -1 do
+			local r = list[ i ]:GetJRagdolled() and list[ i ]:GetJRagEnt() or nil
+			if IsValid( r ) then
+				local p = r:GetPos()
+				local tr = util.TraceLine( { start = p, endpos = p - Vector( 0, 0, 3 * S + 12 ), mask = MASK_SOLID_BRUSHONLY } )
+				if not tr.Hit then table.remove( list, i ) end
+			end
+		end
+	end
+	return list
 end
 
 -- Timings of hit `idx`: startup, action length, extra lock when blocked (seconds)

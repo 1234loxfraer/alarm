@@ -100,8 +100,8 @@ K.Character( "crowcharmer", {
 	color = Color( 90, 90, 120 ),
 
 	-- Fly High: the battle axe's uppercuts send targets nearly twice as high, but no M1 can hit an airborne ragdoll
-	-- (TODO: the airborne ragdoll exclusion)
 	m1 = {
+		NoAirRagdoll = true,
 		-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop)
 		Frames = { { 14, 5, 11 }, { 14, 5, 11 }, { 14, 5, 11 } },
 		Final = {

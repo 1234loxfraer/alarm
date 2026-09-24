@@ -196,7 +196,7 @@ local BM = K.Character( "bloodmanipulator", {
 				onUse = function( ply ) ply:SetNW2Int( "JJSHalo", Orbs( ply ) ) end },
 			-- A giant blood sphere erupts upward, raining pellets on everything within 35 studs (2 per tick; the user acts freely
 			-- after the windup; a ragdoll stops it). The awakening drains 5x faster meanwhile, orbs are spent first.
-			-- TODO: toggling it off and on once.
+			-- Pressed again: toggled off (the time left is kept), then back on once; a third press ends it.
 			[ 3 ] = K.Zone{ "Blood Rain", cooldown = 35, startup = 0.8, radius = 35, duration = 8, tick = 0.5, damage = 2, stun = 0.2,
 				follow = true, type = "swarm", block = "all", bypassRagdoll = true, color = "blood",
 				onUse = function( ply ) ply.jjs_rainUntil = CurTime() + 8.8 end },
@@ -246,6 +246,29 @@ hook.Add( "JJS_PlayerSpawned", "JJS_BloodManipulator", function( ply )
 	ply:SetNW2Int( "JJSBombs", 0 )
 	ply:SetNW2Int( "JJSHalo", 0 )
 end )
+
+-- Blood Rain: off, on again once, then over
+local rain = JJS.Characters.bloodmanipulator.awakening.abilities[ 3 ]
+rain.Again = function( ply )
+	local z
+	for _, zz in ipairs( K.Zones ) do
+		if zz.owner == ply and zz.p.name == "Blood Rain" then z = zz end
+	end
+	if not z then return false end
+	local now = CurTime()
+	if z.paused then
+		z.paused = false
+		ply.jjs_rainUntil = now + ( ply.jjs_rainLeft or 0 )
+	elseif not z.toggled then
+		z.paused, z.toggled = true, true
+		ply.jjs_rainLeft = math.max( 0, ( ply.jjs_rainUntil or 0 ) - now )
+		ply.jjs_rainUntil = 0
+	else
+		z.stop = now
+		ply.jjs_rainUntil = 0
+	end
+	return true
+end
 
 if SERVER then return end
 

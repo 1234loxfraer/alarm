@@ -75,7 +75,7 @@
 --   Zone       lingering area: radius, duration, tick, damage (per tick), follow (stays on the user), offset,
 --              target = true (placed on the aimed target within range and follows them), acting (only hits
 --              players performing an action, interrupting it), once (each target once), onPlace(ply, pos, p),
---              zoneHits = { damage per successive hit on the same target }
+--              zoneHits = { damage per successive hit on the same target }; a zone entry's `paused` holds it
 --   AoE / Zone center(ply) -> position (or nil to cancel): placed there instead of in front of the user
 --   Beam       far = { dist, ragdoll, onHit } for targets hit beyond `dist` studs, falloff (damage at max range)
 --   stunRag = { h, v, time }: targets already stunned are ragdolled instead
@@ -878,6 +878,11 @@ if SERVER then
 		for i = #K.Zones, 1, -1 do
 			local z = K.Zones[ i ]
 			local ply = z.owner
+			-- paused (Blood Rain toggled off): the time left is kept
+			if z.paused and IsValid( ply ) and ply:Alive() and not ply:GetJRagdolled() then
+				z.stop = z.stop + FrameTime()
+				continue
+			end
 			local stopped = z.p.stopOnHit and ( ply:GetJLastHurt() > z.stop - z.p.duration )
 			if not IsValid( ply ) or not ply:Alive() or now >= z.stop or stopped or ( z.p.stopOnRagdoll ~= false and ply:GetJRagdolled() )
 				or ( z.p.target and not IsValid( z.ent ) ) then
