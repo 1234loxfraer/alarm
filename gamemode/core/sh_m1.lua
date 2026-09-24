@@ -15,8 +15,12 @@ M.NEUTRAL, M.UP, M.DOWN = 0, 1, 2
 -- The M1 settings in use: the awakening's own (awakening.m1) while awakened
 function M.Cfg( ply )
 	local char = JJS.GetChar( ply )
-	-- char.M1Alt(ply) -> true: the m1Alt string is used (Black Death unarmed...)
-	if char.M1Alt and char.m1altcfg and char.M1Alt( ply ) then return char.m1altcfg end
+	-- char.M1Alt(ply) -> true: the m1Alt string is used (Black Death unarmed...); a name: that m1Alts entry
+	if char.M1Alt then
+		local k = char.M1Alt( ply )
+		if k == true and char.m1altcfg then return char.m1altcfg end
+		if isstring( k ) and char.m1altcfgs and char.m1altcfgs[ k ] then return char.m1altcfgs[ k ] end
+	end
 	if ply:GetJAwakened() and char.awakening and char.awakening.m1cfg then return char.awakening.m1cfg end
 	return char.m1
 end
@@ -107,8 +111,10 @@ function M.BuildHit( ply, victim, cfg, idx, variant )
 		m1Variant = variant,
 	}
 
-	-- string-wide settings: Unblockable, BypassRagdoll, HitRagdoll = { [idx] = { h, v, time } } (non-final hits)
-	if cfg.Unblockable then hit.block = "none" end
+	-- string-wide settings: Unblockable, BypassRagdoll, HitRagdoll = { [idx] = { h, v, time } } (non-final hits),
+	-- UnblockableHits = { [idx] = true }, BlockDamage = { [idx] = fraction of the damage dealt through block }
+	if cfg.Unblockable or ( cfg.UnblockableHits and cfg.UnblockableHits[ idx ] ) then hit.block = "none" end
+	if cfg.BlockDamage and cfg.BlockDamage[ idx ] then hit.blockDamage = hit.damage * cfg.BlockDamage[ idx ] end
 	if cfg.BypassRagdoll then hit.bypassRagdoll = true end
 	local hr = not final and cfg.HitRagdoll and cfg.HitRagdoll[ idx ]
 	if hr then hit.ragdoll = { time = hr.time or 0.8, vel = fwd * ( hr.h or 30 ) * S + Vector( 0, 0, ( hr.v or 15 ) * S ) } end

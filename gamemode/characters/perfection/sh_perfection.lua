@@ -1,13 +1,29 @@
--- Perfection (Mahito). Moves are JJS.Kit placeholders built from the wiki numbers;
--- comments describe what the real move does.
--- The special cycles Self-Transfiguration modes (Normal, Blade, Club), which change some moves.
--- Awakened, G performs the Awakening Black Flash; landing it twice unlocks the Super Awakening
--- (Instant Spirit Body of Distorted Killing), kept as the awakening's alternate moveset.
+-- Perfection (Mahito). Moves are JJS.Kit placeholders built from the JJS fandom wiki and the dogslamloop frame data
+-- wiki; comments describe what the real move does.
+-- The special cycles Self-Transfiguration modes (Normal, Blade, Club), changing the M1s, the front dash and Focus
+-- Strike (Body Disfigure while awakened). Front dashing or Focus Strike locks the special for about a second.
+-- Awakened, G performs the Awakening Black Flash; landing it twice unlocks the Super Awakening (Instant Spirit Body of
+-- Distorted Killing), kept as the awakening's alternate moveset.
+-- TODO: Soul Reserves (eating held Transfigured Humans/Flesh, pulled out with M1 while blocking) needs items.
 
 local K = JJS.Kit
+local S = JJS.STUD
 
 local MODES = { "Normal", "Blade", "Club" }
 local TRANSFIG = K.Modes{ "Self-Transfiguration", cooldown = 1, modes = MODES }
+
+-- the special is locked for ~1s after a front dash or Focus Strike
+local function LockSpecial( ply ) JJS.SetCooldown( ply, 5, math.max( 1, JJS.GetCooldown( ply, 5 ) - CurTime() ) ) end
+
+-- Mode front dashes: Blade, a crouch then a long teleporting slice (6.5; stuns, ragdolls the already stunned; 8s);
+-- Club, a wide unblockable spin knocking down (8.5; 10s); Super Awakening, "Distorted Dash": a crouch, then a launch
+-- with circular slices stunning in place (12, never ragdolls)
+local BLADE_DASH = K.Build( "perfection", "bladedash", K.Mobility{ "Blade Dash", startup = 0.3, travel = 48, time = 0.12, damage = 6.5,
+	type = "melee", block = "normal", bypassRagdoll = true, stun = 1.2, stunRag = { h = 40, v = 15 }, reach = 10, width = 8 } )
+local CLUB_DASH = K.Build( "perfection", "clubdash", K.AoE{ "Club Dash", startup = 0.3, damage = 8.5, radius = 11, offset = 4, type = "melee",
+	block = "none", ragdoll = { h = 20, v = -20 } } )
+local DISTORTED_DASH = K.Build( "perfection", "distorteddash", K.Mobility{ "Distorted Dash", startup = 0.6, travel = 30, time = 0.25, damage = 12,
+	type = "melee", block = "normal", stun = 1.5, reach = 12, width = 12, color = "cyan" } )
 
 local PERF = K.Character( "perfection", {
 	name = "Perfection",
@@ -16,9 +32,45 @@ local PERF = K.Character( "perfection", {
 	model = K.Model( "perfection", "models/player/zombie_classic.mdl" ),
 	color = Color( 140, 200, 230 ),
 
+	-- per-hit M1 frames { startup, recovery, block endlag } (dogslamloop: safe on block, 13-15f)
+	m1 = { Frames = { { 12, 7, 13 }, { 12, 7, 15 }, { 12, 7, 15 } } },
+	-- Blade: slightly faster, weaker (2 + 2 + 3 + 3; unsafe on block). Club: much slower, stronger (4 + 4 + 5 + 5), the first
+	-- two deal half through block, the last two are unblockable. Super Awakening (Sinister Spurs): faster, 4 + 4 + 5 + 5,
+	-- pulling the user in from further.
+	m1Alts = {
+		blade = { Damage = { 2, 2, 3, 3 }, Frames = { { 10, 8, 15 }, { 10, 9, 21 }, { 10, 9, 19 } } },
+		club = { Damage = { 4, 4, 5, 5 }, Frames = { { 18, 9, 26 }, { 18, 9, 25 }, { 18, 9, 25 } }, BlockDamage = { [ 1 ] = 0.5, [ 2 ] = 0.5 },
+			UnblockableHits = { [ 3 ] = true, [ 4 ] = true } },
+		spurs = { Damage = { 4, 4, 5, 5 }, Frames = { { 10, 6, 13 }, { 10, 6, 13 }, { 10, 6, 13 } }, Pull = 30 * S },
+	},
+	M1Alt = function( ply )
+		if ply:GetJAwakened() and ply:GetJKitSet() == 1 then return "spurs" end
+		local m = ply:GetJMode()
+		return m == 1 and "blade" or m == 2 and "club" or nil
+	end,
+
+	FrontDash = function( ply, mv )
+		local now = CurTime()
+		if ply:GetJAwakened() and ply:GetJKitSet() == 1 then
+			ply:SetJDashFrontCD( now + JJS.Config.Dash.FrontCooldown )
+			DISTORTED_DASH.Use( ply, mv, 0 )
+		elseif ply:GetJMode() == 1 then
+			ply:SetJDashFrontCD( now + 8 )
+			BLADE_DASH.Use( ply, mv, 0 )
+		elseif ply:GetJMode() == 2 then
+			ply:SetJDashFrontCD( now + 10 )
+			CLUB_DASH.Use( ply, mv, 0 )
+		else
+			LockSpecial( ply )
+			return false
+		end
+		LockSpecial( ply )
+		return true
+	end,
+
 	passives = {
-		{ "Blade Mode", "Faster, weaker M1s (2 + 2 + 3 + 3); the front dash becomes a long slice (6.5). (TODO)" },
-		{ "Club Mode", "Slower, stronger M1s (4 + 4 + 5 + 5), last two unblockable; the front dash becomes an unblockable spin (8.5). (TODO)" },
+		{ "Blade Mode", "Faster, weaker M1s (2 + 2 + 3 + 3); the front dash becomes a long slice (6.5, 8s)." },
+		{ "Club Mode", "Slower, stronger M1s (4 + 4 + 5 + 5), last two unblockable; the front dash becomes an unblockable spin (8.5, 10s)." },
 	},
 
 	abilities = {
@@ -28,10 +80,17 @@ local PERF = K.Character( "perfection", {
 		[ 1 ] = K.Melee{ "Stockpile", cooldown = 12, startup = 0.3, damage = 12, hits = 2, interval = 0.35, hitBlock = { "normal", "none" },
 			hitBypass = { false, true }, type = "melee", whiffEndlag = 0.7, ragdoll = { h = 60, v = 25 },
 			air = { damage = 10, hits = 1, hitBlock = false, hitBypass = false, block = "none", bypassRagdoll = true, ragdoll = { h = 10, v = 55 } } },
-		-- An arm that fires three transfigured humans as bullets (4 each), travelling 100 studs; the last one ragdolls.
-		-- TODO hold variant: shoots stored Transfigured Humans/Flesh.
+		-- Idle Transfiguration on themselves: an arm firing three transfigured humans as bullets (4 each, 100 studs; hits
+		-- ragdolls); the first two stun, the last ragdolls, and a miss extends the endlag.
+		-- TODO hold variant: shoots stored Transfigured Humans/Flesh (missed humans turn into minions).
 		[ 2 ] = K.Projectile{ "Soul Fire", cooldown = 12, startup = 0.35, damage = 4, count = 3, volley = 0.2, range = 100, speed = 150, radius = 3,
-			type = "bullet", bypassRagdoll = true, color = "green" },
+			type = "bullet", bypassRagdoll = true, stun = 0.9, color = "green", whiffEndlag = 0.6,
+			onHit = function( ply, v )
+				-- the third human ragdolls
+				v.jjs_soulFire = ( ( v.jjs_soulFireT or 0 ) > CurTime() and v.jjs_soulFire or 0 ) + 1
+				v.jjs_soulFireT = CurTime() + 1
+				if v.jjs_soulFire >= 3 then JJS.Ragdoll.Apply( v, { time = 0.9, vel = K.Fwd( ply ) * 40 * S + Vector( 0, 0, 15 * S ) }, ply ) end
+			end },
 		-- Mode dependent
 		[ 3 ] = K.ByMode{
 			-- Normal: a cursed-energy fist to the torso that pushes back with stun (doesn't hit grounded ragdolls). It keeps
@@ -39,6 +98,7 @@ local PERF = K.Character( "perfection", {
 			-- Follow-up (timed): pressed again with the arm wound back, a Black Flash (12, breaks block, hits ragdolls,
 			-- always ragdolls; slightly punishable on hit).
 			K.Melee{ "Focus Strike", cooldown = 15, startup = 0.4, damage = 10, reach = 9, type = "melee", stun = 1, tip = "USE TWICE",
+				onUse = LockSpecial,
 				onHit = function( ply )
 					ply:SetJM1Index( JJS.GetChar( ply ).m1.Count - 1 )
 					ply:SetJM1LastEnd( CurTime() )
@@ -51,14 +111,19 @@ local PERF = K.Character( "perfection", {
 			K.Melee{ "Chainwhip", cooldown = 15, startup = 0.35, damage = 3, reach = 16, width = 5, type = "melee", block = "all",
 				bypassRagdoll = true, stun = 1.6, ragdoll = { h = -30, v = 25, time = 0.5 },
 				onHit = function( ply ) ply:SetJM1Index( 0 ) ply:SetJM1CD( 0 ) end },
-			-- Club: a giant arm swing that uppercuts targets away.
+			-- Club: the arm drastically enlarged swings forward, uppercutting targets away (18, unblockable); one who blocked
+			-- right before the hit loses their ragdoll cancel.
 			K.Melee{ "Homerun", cooldown = 15, startup = 0.55, damage = 18, reach = 9, width = 10, type = "melee", block = "none",
-				bypassRagdoll = true, ragdoll = { h = 40, v = 60 } },
+				bypassRagdoll = true, ragdoll = { h = 40, v = 60 }, onUse = LockSpecial,
+				onContact = function( ply, v, p, r ) if r == "hit" and v:GetJBlockStart() > CurTime() - 0.5 and v:GetJRagdolled() then v:SetJTrueRagdoll( true ) end end },
 		},
-		-- An amalgamation of four transfigured humans rams everything in front for 70 studs.
-		-- TODO variant: Focus Strike during the windup rides inside it.
+		-- Four transfigured humans combine into an amalgamation ramming everything in front for 70 studs where the user faces
+		-- (14, unblockable, hits ragdolls). Focus Strike during the windup: the user rides inside it, without steering (Focus
+		-- Strike neither needs nor goes on cooldown).
 		[ 4 ] = K.Summon{ "Body Repel", cooldown = 20, startup = 0.5, damage = 14, speed = 70, range = 70, radius = 8, pierce = true,
-			block = "none", bypassRagdoll = true, crater = 900, ragdoll = { h = 50, v = 25 }, color = "green" },
+			block = "none", bypassRagdoll = true, crater = 900, ragdoll = { h = 50, v = 25 }, color = "green",
+			combo = { [ 3 ] = { kind = "mobility", free = true, startup = 0.1, travel = 70, time = 1, dir = "forward", damage = 14, type = "swarm",
+				reach = 10, width = 10 } } },
 	},
 	special = TRANSFIG,
 
@@ -76,6 +141,8 @@ local PERF = K.Character( "perfection", {
 					victim.jjs_idleTouched = victim.jjs_idleTouched or {}
 					if victim.jjs_idleTouched[ ply ] or victim:GetJHP() < 15 then
 						JJS.Kill( victim, ply, { type = JJS.DMG.SPECIAL } )
+						-- a kill keeps the move off cooldown
+						JJS.SetCooldown( ply, 1, 0 )
 					end
 					victim.jjs_idleTouched[ ply ] = true
 				end },
@@ -91,9 +158,11 @@ local PERF = K.Character( "perfection", {
 				K.Target{ "Body Disfigure: Force Grab", cooldown = 15, teleport = false, range = 40, startup = 0.45, damage = 25, hits = 4,
 					interval = 0.4, type = "bullet", block = "none", bypassRagdoll = true, crater = 900, ragdoll = { h = 45, v = 25 } },
 			},
-			-- A blob sends spikes latching onto targets within 25 studs, then slams them (25); faster movement and i-frames once formed.
-			[ 3 ] = K.AoE{ "Spike Wrath", cooldown = 25, startup = 0.9, damage = 25, radius = 25, type = "swarm", bypassRagdoll = true,
-				iframes = 1.2, crater = 1000, ragdoll = { h = 10, v = -30 }, color = "green" },
+			-- Morphs into a blob sending spikes to latch onto targets within 25 studs, then slams the caught ones into the ground
+			-- (25, blockable). Once formed: faster walk speed, melee and bullet i-frames.
+			[ 3 ] = K.AoE{ "Spike Wrath", cooldown = 25, startup = 0.9, damage = 25, radius = 25, type = "swarm", bypassRagdoll = true, moveMult = 1.3,
+				parry = { window = 1.2, counters = { melee = true, bullet = true }, dodge = true }, crater = 1000, ragdoll = { h = 10, v = -30 },
+				color = "green" },
 			-- Domain Expansion: a transfiguration meter drains near the caster; once empty the target is destroyed.
 			[ 4 ] = K.Domain{ "Embodiment of Self Perfection", cooldown = 120, duration = 14, sureHit = "drain", drainTime = 6, color = "cyan" },
 		},
@@ -139,6 +208,12 @@ local BLACK_FLASH = K.Build( "perfection", "abf", K.Melee{ "Awakening Black Flas
 
 function PERF.AwakenPress( ply, mv )
 	if not ply:GetJAwakened() then return end
+	-- pressed again during the lunge: it ends early
+	local act = JJS.GetAction( ply )
+	if act and act.kitParams and act.kitParams.name == "Awakening Black Flash" then
+		JJS.StopAction( ply, true )
+		return true
+	end
 	if JJS.GetCooldown( ply, 1 ) <= CurTime() and BLACK_FLASH.CanUse( ply, 1, mv ) then
 		JJS.SetCooldown( ply, 1, 15 )
 		JJS.AddAwakeningTime( ply, -0.1 )

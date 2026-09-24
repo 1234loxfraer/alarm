@@ -28,11 +28,19 @@ function JJS.RegisterCharacter( id, def )
 	local m1 = table.Copy( JJS.Config.M1 )
 	for k, v in pairs( def.m1 or {} ) do m1[ k ] = v end
 	def.m1 = m1
-	-- m1Alt = { overrides } used while char.M1Alt(ply) is true
+	-- m1Alt = { overrides } used while char.M1Alt(ply) is true; m1Alts = { name = { overrides } } when it returns a name
 	if def.m1Alt then
 		local alt = table.Copy( m1 )
 		for k, v in pairs( def.m1Alt ) do alt[ k ] = v end
 		def.m1altcfg = alt
+	end
+	if def.m1Alts then
+		def.m1altcfgs = {}
+		for name, over in pairs( def.m1Alts ) do
+			local alt = table.Copy( m1 )
+			for k, v in pairs( over ) do alt[ k ] = v end
+			def.m1altcfgs[ name ] = alt
+		end
 	end
 	-- awakening.m1 = { overrides of the base M1 } used while awakened
 	if def.awakening and def.awakening.m1 then
