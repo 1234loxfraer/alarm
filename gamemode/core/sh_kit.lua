@@ -22,7 +22,8 @@
 --   hitDamage = { per hit }, hitBlock = { per hit block rule }, hitBypass = { per hit: hits ragdolls }
 --   A variant's own `cooldown` replaces the move's cooldown when that variant is used.
 --   interrupt = { damage (bonus), stun, ragdoll, onInterrupt(ply, victim, p) } when the hit interrupts the target's
---              action (HIT tip); lowHp = { hp, damage, stun }: final hit bonus against targets at or under `hp`
+--              action (HIT tip); lowHp = { hp, damage, stun }: final hit bonus against targets at or under `hp`;
+--   vsAir = { damage, ragdoll }: bonus against airborne targets
 --   guardBreak = { damage, stun, onBreak(ply, victim, p) } when the target is blocking: the block is broken instead
 --   onContact(ply, victim, p, result) whenever a hit connects (landed or blocked)
 --   parry = { window, counters = { melee = true, ... } }: hits taken this early in the move are parried
@@ -56,7 +57,7 @@
 --   Projectile homing (steers at the target passed to K.SpawnProjectile), speed, range, radius, count, spread,
 --              explode (radius), explodeDamage, directOnly (no blast after a
 --              direct hit), gravity, guided (follows the owner's aim), ghost (passes through players),
---              onExplode(ply, pos, hitSomeone, ent)
+--              onExplode(ply, pos, hitSomeone, ent), onFly(ply, pos, ent) -> true to explode there
 --   Summon     a slow projectile (shikigami, swarms)
 --   AoE        radius, offset (studs in front of the user), up (studs)
 --   Counter    window, counters = { melee = "counter", bullet = "evade", ... }, riposte (damage), teleport,
@@ -283,6 +284,15 @@ function K.Apply( ply, p, victim, idx, from, scale )
 			hit.ragdoll = { time = it.ragdoll.time or 1, vel = away * ( it.ragdoll.h or 30 ) * S + Vector( 0, 0, ( it.ragdoll.v or 18 ) * S ), trueRag = it.trueRag }
 		end
 		hit.interrupted = true
+	end
+	-- vsAir = { damage, ragdoll = { h, v } }: against an airborne (not ragdolled) target
+	local va = p.vsAir
+	if va and not victim:IsOnGround() and not victim:GetJRagdolled() then
+		hit.damage = hit.damage + ( va.damage or 0 )
+		if va.ragdoll then
+			local away = U.Flat( victim:GetPos() - ply:GetPos() )
+			hit.ragdoll = { time = va.ragdoll.time or 1, vel = away * ( va.ragdoll.h or 10 ) * S + Vector( 0, 0, ( va.ragdoll.v or 0 ) * S ), trueRag = va.trueRag }
+		end
 	end
 	-- lowHp = { hp, damage, stun }: bonus on the final hit against a target at or under `hp`
 	local lo = p.lowHp

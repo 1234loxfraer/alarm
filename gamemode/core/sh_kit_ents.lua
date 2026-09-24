@@ -118,6 +118,10 @@ if SERVER then
 		end
 
 		st.left = st.left - len
+		if p.onFly and p.onFly( st.owner, from + step, self ) then
+			self:Explode( from + step )
+			return
+		end
 		if tr.Hit or st.left <= 0 then
 			self:Explode( tr.HitPos )
 			return
